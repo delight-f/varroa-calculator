@@ -17,3 +17,6 @@ env/
 Thumbs.db
 .idea/
 .vscode/
+
+# Handoff documents (session-local, not for the repo)
+handoff.md
