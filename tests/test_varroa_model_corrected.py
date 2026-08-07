@@ -17,14 +17,12 @@ or simply: python3 -m unittest discover -s tests -v
 (no third-party dependencies required)
 """
 
-import math
 import unittest
 
-from varroa_model import VarroaModel
-from varroa_model_corrected import VarroaModelCorrected
+from varroa import VarroaModel, VarroaModelCorrected
 
 
-def _source_period(p):
+def _source_period(p: int) -> int:
     """Northern source period for a southern simulation period p (12-shift)."""
     return ((p + 11) % 24) + 1
 
@@ -64,13 +62,13 @@ class FixATests(unittest.TestCase):
     """Fix A: cohort aging uses PERIOD_DAYS, not the workbook's 15."""
 
     def test_period_days_constant(self):
-        from varroa_model_corrected import PERIOD_DAYS
+        from varroa.varroa_model_corrected import PERIOD_DAYS
         self.assertEqual(PERIOD_DAYS, 365.0 / 24.0)
 
     def test_five_period_old_cohort_is_spent(self):
         # a cohort that has lived 5 periods is fully spent (age >= 5)
         cohorts = [[100.0, 90.0, 80.0, 70.0, 60.0, 50.0]]
-        self.assertEqual(VarroaModelCorrected._frac_spent(cohorts), 1.0)
+        self.assertEqual(VarroaModelCorrected._frac_spent(cohorts), 1.0)  # type: ignore[reportPrivateUsage]
 
 
 class FixBTests(unittest.TestCase):
@@ -78,7 +76,7 @@ class FixBTests(unittest.TestCase):
 
     def test_spent_fraction_not_capped(self):
         cohorts = [[100.0, 90.0, 80.0, 70.0, 60.0, 50.0]]
-        self.assertEqual(VarroaModelCorrected._frac_spent(cohorts), 1.0)
+        self.assertEqual(VarroaModelCorrected._frac_spent(cohorts), 1.0)  # type: ignore[reportPrivateUsage]
 
     def test_mixed_population_uncapped(self):
         cohorts = [
@@ -87,13 +85,13 @@ class FixBTests(unittest.TestCase):
             [100.0, 90.0, 80.0, 70.0, 60.0, 50.0],  # age 5, spent
         ]
         expected = 50.0 / (90.0 + 60.0 + 50.0)
-        self.assertAlmostEqual(VarroaModelCorrected._frac_spent(cohorts), expected)
+        self.assertAlmostEqual(VarroaModelCorrected._frac_spent(cohorts), expected)  # type: ignore[reportPrivateUsage]
 
     def test_faithful_still_caps(self):
         """The faithful baseline keeps its 0.99 cap — the corrected variant
         must not have changed it."""
         cohorts = [[100.0, 90.0, 80.0, 70.0, 60.0, 50.0]]
-        self.assertAlmostEqual(VarroaModel._frac_spent(cohorts), 0.99)
+        self.assertAlmostEqual(VarroaModel._frac_spent(cohorts), 0.99)  # type: ignore[reportPrivateUsage]
 
 
 class FixCTests(unittest.TestCase):
@@ -180,15 +178,15 @@ class FixFTests(unittest.TestCase):
 
     def test_oob_raises(self):
         with self.assertRaises(IndexError):
-            VarroaModelCorrected(immigration_setting=6)
+            VarroaModelCorrected(immigration_setting=6)  # type: ignore[reportUnusedCallResult]
         with self.assertRaises(IndexError):
-            VarroaModelCorrected(immigration_setting=-1)
+            VarroaModelCorrected(immigration_setting=-1)  # type: ignore[reportUnusedCallResult]
 
     def test_nonint_raises(self):
         with self.assertRaises(TypeError):
-            VarroaModelCorrected(immigration_setting="1")
+            VarroaModelCorrected(immigration_setting="1")  # type: ignore[arg-type]
         with self.assertRaises(TypeError):
-            VarroaModelCorrected(immigration_setting=1.5)
+            VarroaModelCorrected(immigration_setting=1.5)  # type: ignore[arg-type]
 
     def test_all_documented_settings_valid(self):
         for s in range(5):
@@ -197,4 +195,4 @@ class FixFTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main()  # type: ignore[reportUnusedCallResult]

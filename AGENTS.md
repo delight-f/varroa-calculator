@@ -18,7 +18,7 @@ The project is **bifurcated**:
 
 ## Architecture & Data Flow
 
-Single-file pure-Python model per variant, **stdlib-only** (`math`, `json`, `os`, `dataclasses`, `typing`). The only third-party dependency (`openpyxl`) is used solely by `validate.py`.
+Single-file pure-Python model per variant, **stdlib-only** (`math`, `json`, `os`, `dataclasses`, `typing`). The only third-party dependency (`openpyxl`) is used solely by `scripts/validate.py`. The package lives in `src/varroa/` (src layout); data files are co-located with the modules and loaded via `__file__`.
 
 ```
 colony_types.json ─┐
@@ -58,42 +58,49 @@ immigration.json ──┘            │
 
 | Path | Purpose |
 |---|---|
-| `varroa_model.py` | Faithful model — the validated reference (do not change numerics) |
-| `varroa_model_corrected.py` | Corrected variant (fixes A–F; standalone copy) |
-| `colony_types.json` | 9 colony-type curves (24 periods each): `brood_frames`, `bee_frames`, `drone_frac` |
-| `immigration.json` | Per-period mite immigration/drift tables (6 columns per period) |
-| `validate.py` | Validation against the source `.xlsx` workbook (only user of `openpyxl`) |
+| `src/varroa/varroa_model.py` | Faithful model — the validated reference (do not change numerics) |
+| `src/varroa/varroa_model_corrected.py` | Corrected variant (fixes A–F; standalone copy) |
+| `src/varroa/colony_types.json` | 9 colony-type curves (24 periods each): `brood_frames`, `bee_frames`, `drone_frac` |
+| `src/varroa/immigration.json` | Per-period mite immigration/drift tables (6 columns per period) |
+| `scripts/validate.py` | Validation against the source `.xlsx` workbook (only user of `openpyxl`) |
 | `tests/` | Stdlib-`unittest` tests for the corrected variant |
-| `MODEL.md` | Extracted cell-level model specification (9 sections) |
-| `MODEL_CONFIRMATION.md` | Author-facing prose description for Randy to confirm (327 lines) |
-| `KNOWN_ISSUES.md` | Documented-but-unfixed discrepancies and unvalidated paths |
+| `docs/MODEL.md` | Extracted cell-level model specification (9 sections) |
+| `docs/MODEL_CONFIRMATION.md` | Author-facing prose description for Randy to confirm (327 lines) |
+| `docs/KNOWN_ISSUES.md` | Documented-but-unfixed discrepancies and unvalidated paths |
+| `pyproject.toml` | Packaging + ruff config |
 | `README.md` | Project overview, usage, files |
 
 ## Development Commands
 
-No package manager, no `pyproject.toml`/`setup.py`, no build step, no lint/format config. Python 3.12.
+Python 3.14. Packaging via `pyproject.toml` (setuptools, src layout). Install editable for development:
+
+```bash
+pip install -e ".[dev]"        # ruff + basedpyright + openpyxl
+```
 
 ```bash
 # Run the default model (colony "d", 100 mites, no treatment) — prints a 24-row table
-python3 varroa_model.py
-python3 varroa_model_corrected.py          # corrected variant
+python3 src/varroa/varroa_model.py
+python3 src/varroa/varroa_model_corrected.py   # corrected variant
 
 # Validate the faithful model against the source workbook (requires openpyxl)
-python3 validate.py "/path/to/Randys-Varroa-Model-V2026 Web(1).xlsx"
+python3 scripts/validate.py "/path/to/Randys-Varroa-Model-V2026 Web(1).xlsx"
 #   Default workbook path if arg omitted:
 #   /home/faraaz/Downloads/Randys-Varroa-Model-V2026 Web(1).xlsx
 
 # Run the test suite (stdlib unittest, no dependencies)
 python3 -m unittest discover -s tests -v
 
-# Install the sole third-party dependency (only for validate.py)
-pip install -r requirements.txt
+# Lint / format (ruff) and type-check (basedpyright, strict mode)
+ruff check .
+ruff format .
+basedpyright
 ```
 
 Library usage (identical for both variants, differing class names):
 
 ```python
-from varroa_model_corrected import VarroaModelCorrected
+from varroa import VarroaModelCorrected
 
 run = VarroaModelCorrected(
     colony_type="d",            # one of: d, n, p, a, b, c, r, s, f
@@ -115,7 +122,7 @@ for p in run.periods:
 - **Growth via `math.exp`/`math.log`.** Per-day intrinsic rates: `math.log((1 + daughters·adj) · survival) / cell_days`. Discrete-period compounding: `math.exp(r · PERIOD_DAYS)`. Mortality stored as log-rates: `math.log(1 - p)`. Observed rate back-solves: `math.log(end/start) / PERIOD_DAYS`.
 - **None→0.0 convention.** Workbook empty cells behave as zero. Encoded by `z = lambda v: 0.0 if v is None else float(v)` (in `colony_state`) and inlined `0.0 if val is None else float(val)` (in `immigration`).
 - **`@dataclass`** for all three data shapes (`Params`, `PeriodResult`, `Run`); `Run` uses `field(default_factory=list)` for trajectory lists.
-- **Typing**: `List[...]` from `typing` (no `from __future__ import annotations`; no builtin `list[...]`/`dict[...]`).
+- **Typing**: builtin generics (`list[...]`, `dict[...]`, `tuple[...]`, `X | None`) and `TypedDict` for the JSON data shapes. No `from __future__ import annotations`; no `typing.List`/`typing.Dict` (deprecated).
 - **Eager import-time JSON load**: `_CT` and `_IM` are loaded at module import (no error handling if files are missing). Importing either model requires the two JSON files beside it.
 - **No logging, no exceptions (faithful), no async, no CLI parsing.** Output is plain `print` in `__main__`. Division-by-zero is guarded inline with `if x else` ternaries throughout. All config flows through constructor parameters.
 
@@ -128,7 +135,7 @@ for p in run.periods:
 ## Important Files
 
 ### Entry points & config
-- `varroa_model.py:378` / `varroa_model_corrected.py` — `if __name__ == "__main__"` runs `default_d_run()` (colony `d`, 100 mites) and prints a 24-row table.
+- `src/varroa/varroa_model.py` / `src/varroa/varroa_model_corrected.py` — `if __name__ == "__main__"` runs `default_d_run()` (colony `d`, 100 mites) and prints a 24-row table.
 - `class VarroaModel` / `class VarroaModelCorrected` — constructor accepts `colony_type`, `initial_mites`, `immigration_setting`, `treatment_kills`, `params`, `southern_hemisphere`, `brood_break_periods`.
 - `run()` — the simulation entry point; returns a `Run`.
 
@@ -139,19 +146,20 @@ for p in run.periods:
 - `_frac_spent` — >75-day (≥5-period) rule; faithful variant caps at 0.99, corrected variant does not.
 
 ### Data files
-- `colony_types.json` — top-level object with 9 **uppercase** keys (`D`, `N`, `P`, `A`, `B`, `C`, `R`, `S`, `F`); each maps to a 24-element array of `{brood_frames, bee_frames, drone_frac}` (values may be `null` = blank cell → coerced to `0.0`). Indexed as `_CT[colony_type.upper()][period-1]`.
-- `immigration.json` — 24 string keys `"1"`..`"24"`; each value is an array of **6** entries (indices 0–5). Columns 0–4 are documented settings; column 5 is undocumented. Non-null values occur only for periods 11–20 (drift season). **Setting 0 = column 0 = all 0.0 = no neighbours / no immigration.** Indexed as `_IM[str(period)][immigration_setting]` (faithful: no bounds check; corrected: validated 0..5).
+- `src/varroa/colony_types.json` — top-level object with 9 **uppercase** keys (`D`, `N`, `P`, `A`, `B`, `C`, `R`, `S`, `F`); each maps to a 24-element array of `{brood_frames, bee_frames, drone_frac}` (values may be `null` = blank cell → coerced to `0.0`). Indexed as `_CT[colony_type.upper()][period-1]`.
+- `src/varroa/immigration.json` — 24 string keys `"1"`..`"24"`; each value is an array of **6** entries (indices 0–5). Columns 0–4 are documented settings; column 5 is undocumented. Non-null values occur only for periods 11–20 (drift season). **Setting 0 = column 0 = all 0.0 = no neighbours / no immigration.** Indexed as `_IM[str(period)][immigration_setting]` (faithful: no bounds check; corrected: validated 0..5).
 
 ### Docs
-- `MODEL.md` — extracted cell-level specification (9 sections): the authoritative mapping from workbook cells to formulas.
-- `MODEL_CONFIRMATION.md` — author-facing prose twin with semantic colony-type names and an appendix on two unimplemented variant sheets.
-- `KNOWN_ISSUES.md` — documented-but-unresolved discrepancies (n/p period-12 seed 0.25 vs 0.15; undocumented 6th immigration column; unvalidated southern path; validation covers only colony `d`).
+- `docs/MODEL.md` — extracted cell-level specification (9 sections): the authoritative mapping from workbook cells to formulas.
+- `docs/MODEL_CONFIRMATION.md` — author-facing prose twin with semantic colony-type names and an appendix on two unimplemented variant sheets.
+- `docs/KNOWN_ISSUES.md` — documented-but-unresolved discrepancies (n/p period-12 seed 0.25 vs 0.15; undocumented 6th immigration column; unvalidated southern path; validation covers only colony `d`).
 
 ## Runtime / Tooling Preferences
 
-- **Runtime**: Python 3.12 (per `__pycache__/*.cpython-312.pyc`). No version pinning config exists.
-- **No package manager.** Install the sole dependency manually when needed: `pip install -r requirements.txt` (only `openpyxl`, only for `validate.py`).
-- **No linter/formatter/CI config** is present.
+- **Runtime**: Python 3.14 (per `pyproject.toml` `requires-python`; local dev venv may be 3.12).
+- **Packaging**: setuptools via `pyproject.toml` (src layout). Install editable for development: `pip install -e ".[dev]"`.
+- **Lint/format**: ruff, configured in `pyproject.toml` (`ruff check .`, `ruff format .`).
+- **Type checking**: basedpyright in strict mode (`typeCheckingMode = "all"`), configured in `pyproject.toml` (`basedpyright`). The project is clean: 0 errors, 0 warnings.
 - **Tests use stdlib `unittest` only** — no pytest dependency.
 
 ## Testing & QA
@@ -162,11 +170,11 @@ There is no test suite for the faithful model (it is validated against the workb
 python3 -m unittest discover -s tests -v
 ```
 
-- **`validate.py`** compares the faithful model against cached values in the workbook's `Current version` sheet.
+- **`scripts/validate.py`** compares the faithful model against cached values in the workbook's `Current version` sheet.
   - **Reference scenario**: colony `d`, 100 starting mites, immigration setting 0, one treatment of 80% kill at period 16 (workbook cell `S21`).
   - **Cells read** from rows 5–28 (periods 1–24): `DF` (start), `DS` (end), `DT` (observed r), `DX` (wash), `CU` (% worker cells invaded), `CA` (% phoretic).
   - **Tolerance**: `TOL = 1e-6` (absolute). Observed max error ~5e-12.
   - **Output**: per-period comparison table, max absolute error, verdict (`ALL PERIODS MATCH` / `MISMATCHES FOUND`).
 - **Corrected-variant tests** assert: parity with the faithful baseline where no correction applies; each fix changes exactly the intended quantity; the southern rotation is internally coherent; edge cases (no brood, no bees, OOB immigration) are handled without sentinel hacks.
 
-When changing the faithful model, the proof is: `python3 validate.py <workbook>` and confirm all 24 periods still match within tolerance. Any edit that breaks this contract (unless explicitly intended) is a regression. When changing the corrected variant, run the unittest suite.
+When changing the faithful model, the proof is: `python3 scripts/validate.py <workbook>` and confirm all 24 periods still match within tolerance. Any edit that breaks this contract (unless explicitly intended) is a regression. When changing the corrected variant, run the unittest suite.

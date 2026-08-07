@@ -1,72 +1,55 @@
-"""Corrected variant of Randy Oliver's Varroa Model (V2026).
+"""Clean re-implementation of Randy Oliver's Varroa Model (V2026).
 
-This file is a *standalone* copy of `varroa_model.py` with a specific set of
-deliberate corrections applied.  The original (`VarroaModel`) remains the
-workbook-faithful reference: its output is validated cell-by-cell against
-"Randys-Varroa-Model-V2026 Web(1).xlsx" to ~5e-12 by `validate.py`, and that
-file is intentionally untouched.
+Extracted from "Randys-Varroa-Model-V2026 Web(1).xlsx", sheet "Current version".
 
-The corrections here fix internal inconsistencies and dead surface area that
-the workbook itself exhibits (see `MODEL.md` section 8 "Known quirks / bugs in
-the spreadsheet").  They are *not* intended to change the model's scientific
-character: reproduction, mortality, density dependence, the aging approximation
-and the nuc/package special cases are carried over verbatim.
+The model simulates the mite population of a honey-bee colony over 24 half-month
+periods.  Each period the colony's brood/bee state is read from a colony-type
+curve, the fraction of mites in brood vs phoretic is derived from a phoretic
+period that depends on the brood:adult-bee ratio (after Boot), reproduction of
+the in-brood mites is computed from daughters-per-cycle and cycle lengths, then
+mortality, immigration/drift and treatment kills are applied.
 
-Corrections (each mapped to the faithful location in `varroa_model.py`):
+Units: population counts (mites, bees, cells); time in days.  All rates are
+*per day*; the period length is 365/24 = 15.2083 days (the spreadsheet dates
+are 15 days apart -- one of the internal inconsistencies of the original).
 
-A. Cohort survival step: the aging table advances every cohort with
-   `exp(r_mort_broodrearing * 15)` in the workbook (faithful file line ~321).
-   The 15 is the workbook's period *date* spacing, but every other growth term
-   in the model uses `PERIOD_DAYS = 365/24 = 15.2083`.  Corrected to use
-   `PERIOD_DAYS` so the aging table ages at the same rate as the population.
-
-B. Spent-fraction cap: the faithful file caps `spent/total` at 0.99
-   (`min(..., 0.99)`).  The fraction of mites older than 75 days can naturally
-   approach 1.0; the cap is an arbitrary workbook convention.  Corrected to
-   return the true fraction.
-
-C. No-bees phoretic edge case: with `brood_ratio == 0` the faithful file
-   substitutes a magic 0.001 for the phoretic period so the log curve does not
-   blow up.  Corrected to handle the edge case explicitly: when there are no
-   adult bees there is no host population, so the phoretic fraction is taken as
-   1.0 and the phoretic period is returned as None (no meaningful value).
-
-D. No-brood-cells sentinel: the faithful file sets `brood_cells = 1.0` when
-   there are no brood frames, only so that `brood_ratio` can be computed
-   without a division by zero.  Corrected to guard the division explicitly:
-   `brood_ratio = 0.0` when there is no brood, with no sentinel value.  A
-   consequence: the drift-out term in `run()` computes `emerging` from the
-   *previous* period's `brood_cells`; with the sentinel removed, a period that
-   follows a no-brood period has `emerging = 0` (no brood emerged) instead of
-   the faithful `0.9/20 * PERIOD_DAYS` mites the workbook's BT=1 cell produces.
-
-E. Southern-hemisphere flag: the faithful constructor stores
-   `southern_hemisphere` but never reads it.  Corrected to implement it as a
-   12-period (half-year) rotation of every season-anchored input: the colony
-   curve, the immigration table, the treatment-kill array, and the nuc/package
-   install period.  A southern colony's period 1 is the northern colony's
-   period 13.  *This behaviour is unvalidated*: no cell of the workbook
-   exercises it, so there is no reference to check it against.
-
-F. Immigration setting index: the faithful file indexes the immigration row
-   with `self.immigration_setting` with no bounds check; the data file has 6
-   columns (0-5), five of which are documented settings.  Corrected to validate
-   the index against the row length and raise `IndexError` with a clear message
-   when out of range.
-
-Units, period conventions and the cell-reference comments are carried over from
-the faithful file unchanged.
+The implementation follows the spreadsheet's arithmetic exactly so that its
+output can be validated cell-by-cell against the workbook.
 """
 
-import math
 import json
+import math
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import TypedDict, cast
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-_CT = json.load(open(os.path.join(HERE, "colony_types.json")))
-_IM = json.load(open(os.path.join(HERE, "immigration.json")))
+
+
+class ColonyPeriod(TypedDict):
+    """One 24-period colony-type curve entry (blank cells coerce to None)."""
+
+    brood_frames: float | None
+    bee_frames: float | None
+    drone_frac: float | None
+
+
+ColonyTypes = dict[str, list[ColonyPeriod]]
+ImmigrationTable = dict[str, list[float | None]]
+
+
+def _load_colony_types() -> ColonyTypes:
+    with open(os.path.join(HERE, "colony_types.json")) as f:
+        return cast(ColonyTypes, json.load(f))
+
+
+def _load_immigration() -> ImmigrationTable:
+    with open(os.path.join(HERE, "immigration.json")) as f:
+        return cast(ImmigrationTable, json.load(f))
+
+
+_CT = _load_colony_types()
+_IM = _load_immigration()
 
 # Period length used by every growth/mortality exponential (365/24).
 PERIOD_DAYS = 365.0 / 24.0
@@ -136,7 +119,7 @@ class PeriodResult:
     adult_bees: float            # BR
     brood_cells: float           # BT
     brood_ratio: float           # BU = brood cells / adult bees
-    phoretic_days: Optional[float]  # BY; None when no adult bees (corrected C)
+    phoretic_days: float         # BY
     pct_phoretic: float          # CA
     pct_in_brood: float          # CB
     drone_pref_frac: float       # CG: fraction of brood-reproducing mites in drone brood
@@ -167,107 +150,93 @@ class PeriodResult:
 @dataclass
 class Run:
     params: Params
-    periods: List[PeriodResult] = field(default_factory=list)
-    mite_trajectory: List[float] = field(default_factory=list)
-    wash_trajectory: List[float] = field(default_factory=list)
-    r_trajectory: List[float] = field(default_factory=list)
+    periods: list[PeriodResult] = field(default_factory=list)
+    mite_trajectory: list[float] = field(default_factory=list)
+    wash_trajectory: list[float] = field(default_factory=list)
+    r_trajectory: list[float] = field(default_factory=list)
 
 
-class VarroaModelCorrected:
+class ColonyVars(TypedDict):
+    """Derived colony/mite state for one period (returned by ``_colony_vars``)."""
+
+    frames_brood: float
+    frames_bees: float
+    drone_area: float
+    adult_bees: float
+    brood_cells: float
+    brood_ratio: float
+    phoretic_days: float  # workbook sentinel 0.001 when there is no brood
+    pct_phoretic: float
+    pct_in_brood: float
+
+
+class VarroaModel:
     def __init__(
         self,
         colony_type: str = "d",
         initial_mites: float = 100.0,
         immigration_setting: int = 0,
-        treatment_kills: List[float] = None,
-        params: Params = None,
+        treatment_kills: list[float] | None = None,
+        params: Params | None = None,
         southern_hemisphere: bool = False,
-        brood_break_periods: List[int] = None,
+        brood_break_periods: list[int] | None = None,
     ):
-        self.colony_type = colony_type.lower()
-        self.initial_mites = initial_mites
-        self.immigration_setting = immigration_setting
-        self.treatment_kills = list(treatment_kills or [0.0] * 24)
-        self.params = params or Params()
-        self.southern = southern_hemisphere
+        self.colony_type: str = colony_type.lower()
+        self.initial_mites: float = initial_mites
+        self.immigration_setting: int = immigration_setting
+        self.treatment_kills: list[float] = list(treatment_kills or [0.0] * 24)
+        self.params: Params = params or Params()
+        self.southern: bool = southern_hemisphere
         # periods (1-24) on which reproduction is forced to zero ("brood break"
         # toggle, as in the workbook's "Brood break" sheet, column AD).
-        self.brood_break = set(brood_break_periods or [])
-
-        # corrected E: validate the immigration setting once at construction.
-        if not isinstance(immigration_setting, int):
-            raise TypeError(
-                f"immigration_setting must be an int in 0..5, got {immigration_setting!r}"
-            )
-        # the row lengths are uniform across periods; check against the first row
-        self._n_immigration_columns = len(_IM["1"])
-        if not 0 <= immigration_setting < self._n_immigration_columns:
-            raise IndexError(
-                f"immigration_setting {immigration_setting} out of range "
-                f"0..{self._n_immigration_columns - 1} (immigration.json has "
-                f"{self._n_immigration_columns} columns)"
-            )
+        self.brood_break: set[int] = set(brood_break_periods or [])
 
     # ------------------------------------------------------------------
     # inputs
     # ------------------------------------------------------------------
-    def _source_period(self, period: int) -> int:
-        """Map a simulation period to the source-curve period.
-
-        In the northern hemisphere the curve is read directly (period 1 = the
-        curve's period 1).  In the southern hemisphere every season-anchored
-        input rotates by 12 periods: the southern period *p* is the northern
-        period ((p + 11) % 24) + 1, i.e. southern spring is northern autumn.
-        """
-        if not self.southern:
-            return period
-        return ((period + 11) % 24) + 1
-
-    def colony_state(self, period: int):
+    def colony_state(self, period: int) -> tuple[float, float, float]:
         """(frames of brood, frames of bees, % drone brood by area) for a period.
 
         Empty cells in the workbook's colony-type curves behave as zero in
         arithmetic, so None is returned as 0.0.
         """
-        d = _CT[self.colony_type.upper()][self._source_period(period) - 1]
-        z = lambda v: 0.0 if v is None else float(v)
+        d = _CT[self.colony_type.upper()][period - 1]
+
+        def z(v: float | None) -> float:
+            return 0.0 if v is None else float(v)
+
         return z(d["brood_frames"]), z(d["bee_frames"]), z(d["drone_frac"])
 
     def immigration(self, period: int) -> float:
         """Mites arriving by drift in this period, given the immigration setting."""
-        row = _IM[str(self._source_period(period))]
-        val = row[self.immigration_setting]
+        row: list[float | None] = _IM[str(period)]
+        val: float | None = row[self.immigration_setting]
         return 0.0 if val is None else float(val)
 
     # ------------------------------------------------------------------
     # colony / mite-state derivation for a period
     # ------------------------------------------------------------------
-    def _colony_vars(self, p: int):
+    def _colony_vars(self, p: int) -> ColonyVars:
         frames_brood, frames_bees, drone_area = self.colony_state(p)
         adult_bees = frames_bees * self.params.bees_per_frame
-        # corrected D: no sentinel value; a colony with no brood has zero brood
-        # cells and a zero brood:bee ratio (the faithful file uses 1.0 here).
-        brood_cells = self.params.cells_per_brood_frame * frames_brood
-        brood_ratio = (brood_cells / adult_bees
-                       if adult_bees > 0 and brood_cells > 0 else 0.0)
-        # corrected C: the no-bees case is handled explicitly instead of the
-        # magic 0.001.  With no adult bees there is no host population, so the
-        # phoretic fraction is 1.0 and phoretic_days has no meaningful value.
-        if brood_ratio == 0:
-            phoretic_days = None
-            pct_phoretic = 1.0
-        else:
-            phoretic_days = (
-                -self.params.phoretic_slope * math.log(brood_ratio)
-                + self.params.phoretic_intercept
-            )
-            pct_phoretic = 1.0 if frames_brood == 0 else phoretic_days / (phoretic_days + 12.0)
-        pct_in_brood = 1.0 - pct_phoretic
-        return dict(
-            frames_brood=frames_brood, frames_bees=frames_bees, drone_area=drone_area,
-            adult_bees=adult_bees, brood_cells=brood_cells, brood_ratio=brood_ratio,
-            phoretic_days=phoretic_days, pct_phoretic=pct_phoretic, pct_in_brood=pct_in_brood,
+        brood_cells = self.params.cells_per_brood_frame * frames_brood if frames_brood else 1.0
+        brood_ratio = brood_cells / adult_bees if adult_bees else 0.0
+        phoretic_days = 0.001 if brood_ratio == 0 else (
+            -self.params.phoretic_slope * math.log(brood_ratio) + self.params.phoretic_intercept
         )
+        pct_phoretic = 1.0 if frames_brood == 0 else phoretic_days / (phoretic_days + 12.0)
+        pct_in_brood = 1.0 - pct_phoretic
+        return {
+            "frames_brood": frames_brood,
+            "frames_bees": frames_bees,
+            "drone_area": drone_area,
+            "adult_bees": adult_bees,
+            "brood_cells": brood_cells,
+            "brood_ratio": brood_ratio,
+            "phoretic_days": phoretic_days,
+            "pct_phoretic": pct_phoretic,
+            "pct_in_brood": pct_in_brood,
+        }
 
     @staticmethod
     def _r_drone(params: Params) -> float:
@@ -275,7 +244,10 @@ class VarroaModelCorrected:
         return math.log(r_cycle) / params.drone_cell_days
 
     def _r_worker(self, params: Params, mites_start: float, worker_sealed_cells: float) -> float:
-        r_cycle = (1.0 + params.worker_daughters_eff * params.worker_density_adj) * params.pupa_survival
+        r_cycle = (
+            (1.0 + params.worker_daughters_eff * params.worker_density_adj)
+            * params.pupa_survival
+        )
         if mites_start > 2.0 * worker_sealed_cells:
             return 0.0
         return math.log(r_cycle) / params.worker_cell_days
@@ -286,20 +258,18 @@ class VarroaModelCorrected:
     def run(self) -> Run:
         params = self.params
         run = Run(params)
-        mites = self.initial_mites
+        mites: float = self.initial_mites
         # aging cohort table: list of cohorts; each cohort = list of surviving mites
         # by age class (0 periods old ..), 1 element per period alive.
         # Replicates the workbook's triangular table (rows 34..57, cols EK..FH):
         #   cohort 1 = the starting population (EK34 = DF5);
         #   cohort born at period j>=2 = the new mites of that period (DIj);
         #   each period every cohort survives: x (1-kill) x exp(r_mort_broodrearing*15).
-        # corrected A: the faithful step uses *15 (the workbook's date spacing);
-        # here the aging table advances at PERIOD_DAYS like every other growth term.
-        cohorts = []
-        frac_spent_at = {}   # fraction of mites >75 days old, by time index
-        prev_brood_cells = None
-        prev_adult_bees = None
-        crashed = False
+        cohorts: list[list[float]] = []
+        frac_spent_at: dict[int, float] = {}   # fraction of mites >75 days old, by time index
+        prev_brood_cells: float | None = None
+        prev_adult_bees: float | None = None
+        crashed: bool = False
 
         # initial cohort = the starting mite population (EK34 = DF5)
         cohorts.append([mites])
@@ -324,15 +294,12 @@ class VarroaModelCorrected:
 
             # start-of-period mite population (DF)
             if self.colony_type in ("n", "p"):
-                # corrected E: the install period rotates with the hemisphere
-                # (northern period 11 = 1 April -> southern period 23).
-                install_period = self._source_period(11)
-                if period == install_period:
+                if period == 11:
                     mites_start = self.initial_mites
                 elif period == 1:
                     mites_start = 0.0
                 else:
-                    mites_start = mites  # 0 until the install period
+                    mites_start = mites  # 0 until period 11
             else:
                 mites_start = self.initial_mites if period == 1 else mites
 
@@ -377,10 +344,7 @@ class VarroaModelCorrected:
             drift_net = immigration + drift_out
 
             pre_treatment = after_mort + drift_net
-            # corrected E: the treatment array rotates with the hemisphere so a
-            # southern run applies the same seasonal treatment (e.g. "mid-June
-            # oxalic") at the southern date, not the northern one.
-            kill = self.treatment_kills[self._source_period(period) - 1]
+            kill = self.treatment_kills[period - 1]
             mites_end = pre_treatment * (1.0 - kill)
 
             r_observed = (math.log(mites_end / mites_start) / PERIOD_DAYS
@@ -390,9 +354,13 @@ class VarroaModelCorrected:
             sealed_worker_cells = worker_sealed
             mites_in_brood = mites_start * c["pct_in_brood"]
             mites_in_worker = mites_in_brood * (1.0 - drone_repro_frac)
-            mites_per_worker_cell = mites_in_worker / sealed_worker_cells if sealed_worker_cells else 0.0
+            mites_per_worker_cell = (
+                mites_in_worker / sealed_worker_cells if sealed_worker_cells else 0.0
+            )
             cells_invaded = 1.0 - math.exp(-mites_per_worker_cell)
-            wash_count = (phoretic_mites / c["adult_bees"]) * params.wash_bees if c["adult_bees"] else 0.0
+            wash_count = (
+                (phoretic_mites / c["adult_bees"]) * params.wash_bees if c["adult_bees"] else 0.0
+            )
             crashed = crashed or cells_invaded > params.crash_cell_invasion \
                       or wash_count > params.crash_wash
 
@@ -404,7 +372,7 @@ class VarroaModelCorrected:
             if period > 1:
                 cohorts.append([new_mites])
             frac_spent_at[period] = self._frac_spent(cohorts)
-            cohorts = [coh + [coh[-1] * (1.0 - kill) * math.exp(params.r_mort_broodrearing * PERIOD_DAYS)]
+            cohorts = [coh + [coh[-1] * (1.0 - kill) * math.exp(params.r_mort_broodrearing * 15.0)]
                        for coh in cohorts]
 
             run.periods.append(PeriodResult(
@@ -436,7 +404,7 @@ class VarroaModelCorrected:
     # aging table (fraction of mites > 75 days old, i.e. "spent")
     # ------------------------------------------------------------------
     @staticmethod
-    def _frac_spent(cohorts) -> float:
+    def _frac_spent(cohorts: list[list[float]]) -> float:
         """Fraction of the population older than `spent_age_days` (5 periods).
 
         Replicates the workbook's triangular cohort table.  A mite is spent
@@ -444,24 +412,21 @@ class VarroaModelCorrected:
         fraction = (mites with age >= 5 at time t) / (all mites at time t).
         `cohorts` is the table state at the current time (cohort i was born at
         period i; entry j is that cohort's population j periods after birth).
-
-        corrected B: the faithful file caps this at 0.99; the true fraction can
-        approach 1.0 as the population ages out, so no cap is applied here.
         """
         total = 0.0
         spent = 0.0
-        for birth, coh in enumerate(cohorts, start=1):
+        for _, coh in enumerate(cohorts, start=1):
             age = len(coh) - 1
             total += coh[-1]
             if age >= 5:
                 spent += coh[-1]
         if total <= 0:
             return 0.0
-        return spent / total
+        return min(spent / total, 0.99)
 
 
 def default_d_run():
-    return VarroaModelCorrected(colony_type="d", initial_mites=100.0).run()
+    return VarroaModel(colony_type="d", initial_mites=100.0).run()
 
 
 if __name__ == "__main__":
@@ -469,4 +434,4 @@ if __name__ == "__main__":
     print(f"{'period':>6} {'start':>10} {'end':>10} {'r_net':>9} {'wash':>8}")
     for pr in run.periods:
         print(f"{pr.period:>6} {pr.mites_start:>10.1f} {pr.mites_end:>10.1f} "
-              f"{pr.r_observed:>9.4f} {pr.wash_count:>8.2f}")
+              + f"{pr.r_observed:>9.4f} {pr.wash_count:>8.2f}")

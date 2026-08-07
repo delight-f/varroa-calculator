@@ -26,7 +26,7 @@ the mite/wash-count trajectory.
 ## Usage
 
 ```python
-from varroa_model import VarroaModel
+from varroa import VarroaModel
 
 run = VarroaModel(
     colony_type="d",        # d, n, p, a, b, c, r, s, f
@@ -43,7 +43,7 @@ for p in run.periods:
 A standalone run:
 
 ```bash
-python3 varroa_model.py
+python3 src/varroa/varroa_model.py
 ```
 
 ## Corrected variant
@@ -57,7 +57,7 @@ spent-fraction cap, explicit no-brood/no-bees edge handling, an implemented
 settings.  Its scientific character is unchanged.
 
 ```python
-from varroa_model_corrected import VarroaModelCorrected
+from varroa import VarroaModelCorrected
 
 run = VarroaModelCorrected(colony_type="d", initial_mites=100.0,
                            southern_hemisphere=True).run()
@@ -71,27 +71,28 @@ python3 -m unittest discover -s tests -v
 
 ## Validation
 
-`validate.py` compares the Python model against the workbook's cached values
-for the "Current version" run (colony `d`, 100 mites, 0.8 treatment at period
-16).  **All 24 periods match to within ~5e-12.**
+`scripts/validate.py` compares the Python model against the workbook's cached
+values for the "Current version" run (colony `d`, 100 mites, 0.8 treatment at
+period 16).  **All 24 periods match to within ~5e-12.**
 
 ```bash
-python3 validate.py /path/to/Randys-Varroa-Model-V2026\ Web\(1\).xlsx
+python3 scripts/validate.py /path/to/Randys-Varroa-Model-V2026\ Web\(1\).xlsx
 ```
 
 ## Files
 
-| File | Purpose |
+| Path | Purpose |
 |---|---|
-| `varroa_model.py` | Faithful model implementation (validated reference) |
-| `varroa_model_corrected.py` | Corrected variant (fixes A-F) |
-| `colony_types.json` | 9 colony-type curves (24 periods each) |
-| `immigration.json` | Per-period mite immigration tables (settings 0-4) |
-| `validate.py` | Validation against the source workbook |
+| `src/varroa/varroa_model.py` | Faithful model implementation (validated reference) |
+| `src/varroa/varroa_model_corrected.py` | Corrected variant (fixes A-F) |
+| `src/varroa/colony_types.json` | 9 colony-type curves (24 periods each) |
+| `src/varroa/immigration.json` | Per-period mite immigration tables (settings 0-4) |
+| `scripts/validate.py` | Validation against the source workbook |
 | `tests/` | Stdlib-unittest tests for the corrected variant |
-| `MODEL.md` | Extracted model specification (cell-level) |
-| `MODEL_CONFIRMATION.md` | Author-facing description for confirmation |
-| `KNOWN_ISSUES.md` | Documented-but-unfixed discrepancies |
+| `docs/MODEL.md` | Extracted model specification (cell-level) |
+| `docs/MODEL_CONFIRMATION.md` | Author-facing description for confirmation |
+| `docs/KNOWN_ISSUES.md` | Documented-but-unfixed discrepancies |
+| `pyproject.toml` | Packaging + ruff config |
 | `AGENTS.md` | Repository guidelines for AI assistants |
 
 ## Credits
