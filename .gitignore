@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+
+# The source workbook is large and binary; keep it out of the repo.
+*.xlsx
+*.xlsm
+*.xls
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
