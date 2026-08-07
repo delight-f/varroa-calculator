@@ -1,0 +1,8 @@
+# Third-party dependencies.
+#
+# varroa_model.py and varroa_model_corrected.py use only the Python standard
+# library (math, json, os, dataclasses, typing).  The single external
+# dependency is openpyxl, used only by validate.py to read the reference
+# workbook.  Tests use only stdlib unittest.
+
+openpyxl>=3.1

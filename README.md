@@ -46,6 +46,29 @@ A standalone run:
 python3 varroa_model.py
 ```
 
+## Corrected variant
+
+`varroa_model.py` is the *faithful* baseline: it reproduces the workbook's
+arithmetic cell-by-cell so it can be validated.  `varroa_model_corrected.py`
+is a standalone copy with six deliberate corrections (documented in its module
+docstring): consistent period length in the aging table, no arbitrary 0.99
+spent-fraction cap, explicit no-brood/no-bees edge handling, an implemented
+`southern_hemisphere` 12-period rotation, and bounds-checked immigration
+settings.  Its scientific character is unchanged.
+
+```python
+from varroa_model_corrected import VarroaModelCorrected
+
+run = VarroaModelCorrected(colony_type="d", initial_mites=100.0,
+                           southern_hemisphere=True).run()
+```
+
+Tests (stdlib `unittest`, no dependencies):
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
 ## Validation
 
 `validate.py` compares the Python model against the workbook's cached values
@@ -60,12 +83,16 @@ python3 validate.py /path/to/Randys-Varroa-Model-V2026\ Web\(1\).xlsx
 
 | File | Purpose |
 |---|---|
-| `varroa_model.py` | The model implementation |
+| `varroa_model.py` | Faithful model implementation (validated reference) |
+| `varroa_model_corrected.py` | Corrected variant (fixes A-F) |
 | `colony_types.json` | 9 colony-type curves (24 periods each) |
 | `immigration.json` | Per-period mite immigration tables (settings 0-4) |
 | `validate.py` | Validation against the source workbook |
+| `tests/` | Stdlib-unittest tests for the corrected variant |
 | `MODEL.md` | Extracted model specification (cell-level) |
 | `MODEL_CONFIRMATION.md` | Author-facing description for confirmation |
+| `KNOWN_ISSUES.md` | Documented-but-unfixed discrepancies |
+| `AGENTS.md` | Repository guidelines for AI assistants |
 
 ## Credits
 
