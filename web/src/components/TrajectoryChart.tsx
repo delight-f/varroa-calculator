@@ -10,7 +10,7 @@
  * responsive sizing for tablet.
  */
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import ReactApexChart from 'react-apexcharts'
 import type { ScenarioDisplayPeriod } from '../model/scenario'
 import type { TreatmentEntry } from '../model/treatmentPlan'
@@ -45,6 +45,21 @@ export function TrajectoryChart({
   yUnit,
   onClickPeriod,
 }: ChartProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [height, setHeight] = useState(420)
+
+  // Size the chart to fill its container (the chart-card), so the plot area
+  // stretches to match the controls panel height on desktop instead of
+  // leaving dead space below a fixed 420px chart.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const update = () => setHeight(el.clientHeight)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const css = useMemo(() => {
     const s = getComputedStyle(document.documentElement)
     return {
@@ -222,5 +237,9 @@ export function TrajectoryChart({
     { name: 'No treatment (baseline)', data: activeBaseline },
   ]
 
-  return <ReactApexChart options={options} series={seriesData} type="line" height={420} />
+  return (
+    <div ref={containerRef} className="chart-fill">
+      <ReactApexChart options={options} series={seriesData} type="line" height={height} />
+    </div>
+  )
 }
