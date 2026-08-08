@@ -43,6 +43,10 @@ export interface ScenarioResult {
   treatedWash: number[]
   /** per-period wash count with no treatments (faint baseline) */
   baselineWash: number[]
+  /** per-period total mite population with treatments applied (bold line) */
+  treatedMites: number[]
+  /** per-period total mite population with no treatments (faint baseline) */
+  baselineMites: number[]
 }
 
 /**
@@ -97,6 +101,8 @@ export function runScenario(input: ScenarioInput): ScenarioResult {
 
   const treatedWash = window.map((p) => byPeriod.get(p)!.wash_count)
   const baselineWash = window.map((p) => baselineRun.periods[p - 1]!.wash_count)
+  const treatedMites = window.map((p) => byPeriod.get(p)!.mites_end)
+  const baselineMites = window.map((p) => baselineRun.periods[p - 1]!.mites_end)
 
-  return { startPeriod, initialMites, periods, byPeriod, treatedWash, baselineWash }
+  return { startPeriod, initialMites, periods, byPeriod, treatedWash, baselineWash, treatedMites, baselineMites }
 }

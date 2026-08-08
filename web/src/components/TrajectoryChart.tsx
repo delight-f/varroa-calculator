@@ -4,6 +4,10 @@
  * ADR-0003: single-hue weight hierarchy — bold deep-blue treatment line,
  * faint grey baseline; x-axis tick/flag treatment markers (product name on
  * hover); crash threshold line; colours from design tokens (light + dark).
+ *
+ * T9: y-axis toggle between wash count (mites/wash) and total mite
+ * population, threshold reference lines (watch + treat), legend, and
+ * responsive sizing for tablet.
  */
 
 import { useMemo } from 'react'
@@ -11,6 +15,7 @@ import ReactApexChart from 'react-apexcharts'
 import type { ScenarioDisplayPeriod } from '../model/scenario'
 import type { TreatmentEntry } from '../model/treatmentPlan'
 import { treatmentProduct } from '../treatments'
+import { ADVISORY } from '../model/banner'
 
 export interface ChartProps {
   periods: ScenarioDisplayPeriod[]
@@ -18,6 +23,10 @@ export interface ChartProps {
   treated: number[]
   /** baseline line data (faint grey) */
   baseline: number[]
+  /** treated total-mite line data (bold deep blue) */
+  treatedMites: number[]
+  /** baseline total-mite line data (faint grey) */
+  baselineMites: number[]
   /** treatments placed on model periods, for x-axis tick/flag markers */
   treatmentPeriods: Array<{ period: number; entries: TreatmentEntry[] }>
   /** y-axis unit: wash count (mites/wash) or total mite population */
@@ -26,7 +35,16 @@ export interface ChartProps {
   onClickPeriod?: (period: number) => void
 }
 
-export function TrajectoryChart({ periods, treated, baseline, treatmentPeriods, yUnit, onClickPeriod }: ChartProps) {
+export function TrajectoryChart({
+  periods,
+  treated,
+  baseline,
+  treatedMites,
+  baselineMites,
+  treatmentPeriods,
+  yUnit,
+  onClickPeriod,
+}: ChartProps) {
   const css = useMemo(() => {
     const s = getComputedStyle(document.documentElement)
     return {
@@ -36,8 +54,13 @@ export function TrajectoryChart({ periods, treated, baseline, treatmentPeriods, 
       muted: s.getPropertyValue('--color-text-muted').trim() || '#6b7280',
       grid: s.getPropertyValue('--color-border').trim() || '#e5e7eb',
       red: s.getPropertyValue('--color-red').trim() || '#dc2626',
+      yellow: s.getPropertyValue('--color-yellow').trim() || '#d97706',
     }
   }, [])
+
+  // the active line is whichever unit is selected; the other is hidden
+  const active = yUnit === 'wash' ? treated : treatedMites
+  const activeBaseline = yUnit === 'wash' ? baseline : baselineMites
 
   const options = useMemo<ApexCharts.ApexOptions>(() => {
     const firstCrash = periods.findIndex((p) => p.crashed)
@@ -62,6 +85,47 @@ export function TrajectoryChart({ periods, treated, baseline, treatmentPeriods, 
       }
     }).filter((a): a is NonNullable<typeof a> => a !== null)
 
+    // Threshold reference lines (wash mode only): the "watch" line (3
+    // mites/wash) and the treat threshold (9 mites/wash in summer). Both are
+    // configurable constants from the banner's advisory thresholds. In total-
+    // mite mode these wash-based thresholds don't apply, so they're hidden.
+    const yAnnotations =
+      yUnit === 'wash'
+        ? [
+            {
+              y: ADVISORY.watchWash,
+              borderColor: css.yellow,
+              strokeDashArray: 4,
+              label: {
+                text: `watch (${ADVISORY.watchWash})`,
+                style: { color: '#fff', background: css.yellow, fontSize: '10px' },
+              },
+            },
+            {
+              y: ADVISORY.dangerousWashHigh,
+              borderColor: css.red,
+              strokeDashArray: 4,
+              label: {
+                text: `treat (${ADVISORY.dangerousWashHigh})`,
+                style: { color: '#fff', background: css.red, fontSize: '10px' },
+              },
+            },
+            ...(firstCrash >= 0
+              ? [
+                  {
+                    y: ADVISORY.crashWash,
+                    borderColor: css.red,
+                    strokeDashArray: 4,
+                    label: {
+                      text: 'model breakdown (wash > 60)',
+                      style: { color: '#fff', background: css.red, fontSize: '10px' },
+                    },
+                  },
+                ]
+              : []),
+          ]
+        : []
+
     return {
       chart: {
         type: 'line',
@@ -69,6 +133,9 @@ export function TrajectoryChart({ periods, treated, baseline, treatmentPeriods, 
         animations: { enabled: true, speed: 300 },
         fontFamily: 'inherit',
         background: 'transparent',
+        // responsive: fill the card width, fixed height; ApexCharts resizes
+        // with the container on window resize
+        width: '100%',
       },
       colors: [css.accent, css.baseline],
       stroke: {
@@ -103,7 +170,14 @@ export function TrajectoryChart({ periods, treated, baseline, treatmentPeriods, 
         title: { text: yTitle, style: { color: css.muted } },
         labels: { style: { colors: css.muted } },
       },
-      legend: { show: false },
+      legend: {
+        show: true,
+        position: 'top',
+        horizontalAlign: 'right',
+        labels: { colors: css.muted },
+        markers: { size: 6 },
+        itemMargin: { horizontal: 8 },
+      },
       // intersect:true makes markers interactive (removes no-pointer-events),
       // required for click-to-place via dataPointSelection. shared must be
       // false with intersect (ApexCharts constraint).
@@ -132,24 +206,14 @@ export function TrajectoryChart({ periods, treated, baseline, treatmentPeriods, 
               ]
             : []),
         ],
-        yaxis:
-          firstCrash >= 0
-            ? [
-                {
-                  y: 60,
-                  borderColor: css.red,
-                  strokeDashArray: 4,
-                  label: { text: 'model breakdown (wash > 60)', style: { color: '#fff', background: css.red } },
-                },
-              ]
-            : [],
+        yaxis: yAnnotations,
       },
     }
-  }, [periods, treated, baseline, treatmentPeriods, yUnit, css, onClickPeriod])
+  }, [periods, treated, baseline, treatedMites, baselineMites, treatmentPeriods, yUnit, css, onClickPeriod])
 
   const seriesData = [
-    { name: 'With treatments', data: treated },
-    { name: 'No treatment (baseline)', data: baseline },
+    { name: 'With treatments', data: active },
+    { name: 'No treatment (baseline)', data: activeBaseline },
   ]
 
   return <ReactApexChart options={options} series={seriesData} type="line" height={420} />

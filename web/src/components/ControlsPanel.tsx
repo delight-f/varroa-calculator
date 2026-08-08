@@ -14,6 +14,8 @@ export interface ControlsState {
   month: MonthName
   washCount: number
   immigrationSetting: number
+  /** chart y-axis: wash count (mites/wash) or total mite population */
+  yUnit: 'wash' | 'mites'
 }
 
 export interface ControlsProps {
@@ -99,6 +101,17 @@ export function ControlsPanel({ state, onChange, children }: ControlsProps) {
                 {o.label} ({o.hint})
               </option>
             ))}
+          </select>
+        </label>
+        <label className="field">
+          <span className="field-label">Chart y-axis</span>
+          <span className="field-hint">Wash count or the underlying total mite population</span>
+          <select
+            value={state.yUnit}
+            onChange={(e) => onChange({ yUnit: e.target.value as ControlsState['yUnit'] })}
+          >
+            <option value="wash">Mites per wash</option>
+            <option value="mites">Total mites</option>
           </select>
         </label>
       </section>

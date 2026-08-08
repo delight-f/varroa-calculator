@@ -27,6 +27,7 @@ function initialControls(): ControlsState {
     month: isMonthName(m) ? m : 'Nov',
     washCount: 10,
     immigrationSetting: 0,
+    yUnit: 'wash',
   }
 }
 
@@ -98,8 +99,10 @@ function App() {
               periods={scenario.periods}
               treated={scenario.treatedWash}
               baseline={scenario.baselineWash}
+              treatedMites={scenario.treatedMites}
+              baselineMites={scenario.baselineMites}
               treatmentPeriods={markers}
-              yUnit="wash"
+              yUnit={controls.yUnit}
               onClickPeriod={(period) => {
                 // secondary path: click a point -> place the currently selected
                 // product on that month (default Apivar). The form remains primary.

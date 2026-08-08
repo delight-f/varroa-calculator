@@ -106,7 +106,7 @@ describe('runScenario', () => {
     }
   })
 
-  it('same-period treatments compose: one vs two treatments differ', () => {
+it('same-period treatments compose: one vs two treatments differ', () => {
     const one = runScenario({
       colonyType: 'd', washCount: 10, startMonth: 'Jun', immigrationSetting: 0, southern: false,
       treatments: [{ id: 1, month: 'Sep', productId: 'apivar' }],
@@ -120,5 +120,41 @@ describe('runScenario', () => {
     })
     const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0)
     expect(sum(two.treatedWash)).toBeLessThan(sum(one.treatedWash))
+  })
+
+  it('exposes total-mite trajectories alongside wash', () => {
+    const r = runScenario({
+      colonyType: 'd', washCount: 10, startMonth: 'Jun', immigrationSetting: 0, southern: false,
+    })
+    expect(r.treatedMites).toHaveLength(24)
+    expect(r.baselineMites).toHaveLength(24)
+    // total mites are always >= the wash count (wash is a ~315-bee sample)
+    for (let i = 0; i < 24; i++) {
+      expect(r.treatedMites[i]!).toBeGreaterThanOrEqual(r.periods[i]!.wash)
+      expect(r.baselineMites[i]!).toBeGreaterThanOrEqual(r.periods[i]!.wash)
+    }
+    // with no treatments the mite lines coincide
+    for (let i = 0; i < 24; i++) {
+      expect(r.treatedMites[i]!).toBeCloseTo(r.baselineMites[i]!, 9)
+    }
+  })
+
+  it('a treatment bends the mite line below its baseline from the treatment period on', () => {
+    const r = runScenario({
+      colonyType: 'd', washCount: 10, startMonth: 'Jun', immigrationSetting: 0, southern: false,
+      treatments: [{ id: 1, month: 'Sep', productId: 'apivar' }],
+    })
+    // window starts at Jun (period 15); Sep is period 21 -> index 6
+    expect(r.periods[6]!.label).toBe('Sep')
+    // before the treatment the mite lines match
+    for (let i = 0; i < 6; i++) {
+      expect(r.treatedMites[i]!).toBeCloseTo(r.baselineMites[i]!, 6)
+    }
+    // the treatment period itself: mites_end reflects the kill, so the treated
+    // line drops below the baseline from this period on
+    for (let i = 6; i < 24; i++) {
+      expect(r.treatedMites[i]!).toBeLessThanOrEqual(r.baselineMites[i]!)
+    }
+    expect(r.treatedMites[6]!).toBeLessThan(r.baselineMites[6]!)
   })
 })
