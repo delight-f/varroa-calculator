@@ -213,8 +213,12 @@ export function TrajectoryChart({
           ...(firstCrash >= 0
             ? [
                 {
-                  x: firstCrash,
-                  x2: periods.length - 1,
+                  // ApexCharts resolves x-axis annotation x/x2 against the
+                  // category *labels* (getStringX), not indices. Passing the
+                  // month label at the crash point and the last period's label
+                  // makes the band span from the crash month to the chart end.
+                  x: periods[firstCrash]!.label,
+                  x2: periods[periods.length - 1]!.label,
                   fillColor: css.red,
                   opacity: 0.08,
                   strokeDashArray: 4,
