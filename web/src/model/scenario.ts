@@ -27,7 +27,7 @@ export interface ScenarioInput {
 
 export interface ScenarioDisplayPeriod {
   period: number
-  label: string // calendar month label
+  label: MonthName // calendar month label
   wash: number
   mites: number
   crashed: boolean

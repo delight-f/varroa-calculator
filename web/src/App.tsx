@@ -3,9 +3,11 @@ import { ControlsPanel } from './components/ControlsPanel'
 import type { ControlsState } from './components/ControlsPanel'
 import { TreatmentPlanSection } from './components/TreatmentPlanSection'
 import { TrajectoryChart } from './components/TrajectoryChart'
+import { Banner } from './components/Banner'
 import { runScenario } from './model/scenario'
 import { groupTreatmentsByPeriod } from './model/treatmentPlan'
 import type { TreatmentEntry } from './model/treatmentPlan'
+import { bannerState } from './model/banner'
 import { MONTH_NAMES, isMonthName } from './model/months'
 import type { MonthName } from './model/months'
 
@@ -62,6 +64,18 @@ function App() {
 
   const update = (patch: Partial<ControlsState>) => setControls((c) => ({ ...c, ...patch }))
 
+  const banner = useMemo(
+    () =>
+      bannerState({
+        startWash: controls.washCount,
+        washTrajectory: scenario.treatedWash,
+        labels: scenario.periods.map((p) => p.label),
+        hasTreatments: treatments.length > 0,
+        crashed: scenario.periods.some((p) => p.crashed),
+      }),
+    [scenario, treatments.length, controls.washCount],
+  )
+
   return (
     <div className="app">
       <header className="app-header">
@@ -77,7 +91,7 @@ function App() {
           />
         </ControlsPanel>
         <section className="chart-area">
-          <div className="banner-slot" />
+          <Banner state={banner} />
           <div className="chart-card">
             <TrajectoryChart
               periods={scenario.periods}

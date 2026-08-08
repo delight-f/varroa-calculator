@@ -111,7 +111,27 @@ export function TrajectoryChart({ periods, treated, baseline, treatmentPeriods, 
       dataLabels: { enabled: false },
       fill: { opacity: [1, 1] },
       annotations: {
-        xaxis: xAnnotations,
+        xaxis: [
+          ...xAnnotations,
+          // crash zone: shaded/faded region from the crash point to the end
+          // (numbers keep plotting past it — never blanked)
+          ...(firstCrash >= 0
+            ? [
+                {
+                  x: firstCrash,
+                  x2: periods.length - 1,
+                  fillColor: css.red,
+                  opacity: 0.08,
+                  strokeDashArray: 4,
+                  label: {
+                    text: 'crash zone',
+                    position: 'top' as const,
+                    style: { color: css.red, fontSize: '10px' },
+                  },
+                },
+              ]
+            : []),
+        ],
         yaxis:
           firstCrash >= 0
             ? [
