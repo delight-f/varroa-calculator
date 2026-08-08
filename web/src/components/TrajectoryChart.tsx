@@ -175,8 +175,17 @@ export function TrajectoryChart({
       grid: { borderColor: css.grid },
       xaxis: {
         type: 'category',
-        categories: periods.map((p) => p.label),
-        labels: { style: { colors: css.muted }, rotate: -45 },
+        categories: periods.map(
+          // The model runs 24 half-month periods (two per calendar month).
+          // Blank the second period's label so the axis shows one month name
+          // per month; the data keeps all 24 points. (Annotations resolve a
+          // month label to its first period, which is the intended anchor.)
+          (p, i) => (i % 2 === 1 ? '' : p.label),
+        ),
+        labels: {
+          style: { colors: css.muted },
+          rotate: -45,
+        },
         axisBorder: { color: css.grid },
         axisTicks: { color: css.grid },
         tickPlacement: 'on',
