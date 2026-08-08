@@ -19,6 +19,7 @@ export interface ControlsState {
 export interface ControlsProps {
   state: ControlsState
   onChange: (next: Partial<ControlsState>) => void
+  children?: React.ReactNode
 }
 
 const IMMIGRATION_OPTIONS = [
@@ -29,9 +30,7 @@ const IMMIGRATION_OPTIONS = [
   { value: 4, label: 'Apiary', hint: 'Extreme drift (many hives nearby)' },
 ] as const
 
-export function ControlsPanel({ state, onChange }: ControlsProps) {
-  const set = (patch: Partial<ControlsState>) => onChange(patch)
-
+export function ControlsPanel({ state, onChange, children }: ControlsProps) {
   return (
     <aside className="controls-panel">
       <section className="control-group">
@@ -40,7 +39,7 @@ export function ControlsPanel({ state, onChange }: ControlsProps) {
           <span className="field-label">Colony type</span>
           <select
             value={state.colonyType}
-            onChange={(e) => set({ colonyType: e.target.value })}
+            onChange={(e) => onChange({ colonyType: e.target.value })}
           >
             {COLONY_TYPES.map((c) => (
               <option key={c.code} value={c.code} title={c.description}>
@@ -57,7 +56,7 @@ export function ControlsPanel({ state, onChange }: ControlsProps) {
           <input
             type="checkbox"
             checked={state.southern}
-            onChange={(e) => set({ southern: e.target.checked })}
+            onChange={(e) => onChange({ southern: e.target.checked })}
           />
         </label>
       </section>
@@ -68,7 +67,7 @@ export function ControlsPanel({ state, onChange }: ControlsProps) {
           <span className="field-label">Current month</span>
           <select
             value={state.month}
-            onChange={(e) => set({ month: e.target.value as MonthName })}
+            onChange={(e) => onChange({ month: e.target.value as MonthName })}
           >
             {MONTH_NAMES.map((m) => (
               <option key={m} value={m}>{m}</option>
@@ -85,7 +84,7 @@ export function ControlsPanel({ state, onChange }: ControlsProps) {
             value={Number.isFinite(state.washCount) ? state.washCount : ''}
             onChange={(e) => {
               const v = e.target.valueAsNumber
-              set({ washCount: Number.isNaN(v) ? 0 : v })
+              onChange({ washCount: Number.isNaN(v) ? 0 : v })
             }}
           />
         </label>
@@ -93,7 +92,7 @@ export function ControlsPanel({ state, onChange }: ControlsProps) {
           <span className="field-label">Immigration / drift</span>
           <select
             value={state.immigrationSetting}
-            onChange={(e) => set({ immigrationSetting: Number(e.target.value) })}
+            onChange={(e) => onChange({ immigrationSetting: Number(e.target.value) })}
           >
             {IMMIGRATION_OPTIONS.map((o) => (
               <option key={o.value} value={o.value} title={o.hint}>
@@ -104,10 +103,7 @@ export function ControlsPanel({ state, onChange }: ControlsProps) {
         </label>
       </section>
 
-      <section className="control-group">
-        <h2>Treatment plan</h2>
-        <p className="group-empty">Coming in the next phase.</p>
-      </section>
+      {children}
     </aside>
   )
 }

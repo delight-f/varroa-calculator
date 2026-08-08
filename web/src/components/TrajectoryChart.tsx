@@ -2,43 +2,31 @@
  * Trajectory chart (ApexCharts line chart).
  *
  * ADR-0003: single-hue weight hierarchy — bold deep-blue treatment line,
- * faint grey baseline; x-axis tick/flag treatment markers; crash zone
- * dashed/faded; colours from design tokens (light + dark).
+ * faint grey baseline; x-axis tick/flag treatment markers (product name on
+ * hover); crash threshold line; colours from design tokens (light + dark).
  */
 
 import { useMemo } from 'react'
 import ReactApexChart from 'react-apexcharts'
 import type { ScenarioDisplayPeriod } from '../model/scenario'
-
-export interface ChartSeries {
-  /** treatment-applied trajectory (bold blue) */
-  treatment: Array<number | null>
-  /** baseline no-treatment trajectory (faint grey) */
-  baseline: number[]
-  /** index into the window where the treatment line diverges (or -1) */
-  firstTreatmentIndex: number
-}
+import type { TreatmentEntry } from '../model/treatmentPlan'
+import { treatmentProduct } from '../treatments'
 
 export interface ChartProps {
   periods: ScenarioDisplayPeriod[]
-  series: ChartSeries
+  /** treated line data (bold deep blue) */
+  treated: number[]
+  /** baseline line data (faint grey) */
+  baseline: number[]
+  /** treatments placed on model periods, for x-axis tick/flag markers */
+  treatmentPeriods: Array<{ period: number; entries: TreatmentEntry[] }>
   /** y-axis unit: wash count (mites/wash) or total mite population */
   yUnit: 'wash' | 'mites'
+  /** secondary interaction: click a period to place a treatment */
+  onClickPeriod?: (period: number) => void
 }
 
-export function buildSeries(
-  periods: ScenarioDisplayPeriod[],
-  yUnit: 'wash' | 'mites',
-  firstTreatmentIndex: number,
-): ChartSeries {
-  const baseline = periods.map((p) => (yUnit === 'wash' ? p.wash : p.mites))
-  const treatment = periods.map((p, i) =>
-    i < firstTreatmentIndex ? null : yUnit === 'wash' ? p.wash : p.mites,
-  )
-  return { treatment, baseline, firstTreatmentIndex }
-}
-
-export function TrajectoryChart({ periods, series, yUnit }: ChartProps) {
+export function TrajectoryChart({ periods, treated, baseline, treatmentPeriods, yUnit, onClickPeriod }: ChartProps) {
   const css = useMemo(() => {
     const s = getComputedStyle(document.documentElement)
     return {
@@ -54,6 +42,26 @@ export function TrajectoryChart({ periods, series, yUnit }: ChartProps) {
   const options = useMemo<ApexCharts.ApexOptions>(() => {
     const firstCrash = periods.findIndex((p) => p.crashed)
     const yTitle = yUnit === 'wash' ? 'Mites per wash' : 'Total mites'
+
+    // x-axis tick/flag markers (ADR-0003): a short vertical tick at the
+    // treatment's category, with the product name as the annotation label.
+    const xAnnotations = treatmentPeriods.map((t) => {
+      const idx = periods.findIndex((p) => p.period === t.period)
+      if (idx < 0) return null
+      const label = t.entries.map((e) => treatmentProduct(e.productId).name).join(' + ')
+      return {
+        x: idx, // category index
+        borderColor: css.accent,
+        strokeDashArray: 0,
+        strokeWidth: 2,
+        label: {
+          text: label,
+          position: 'top' as const,
+          style: { color: '#fff', background: css.accent, fontSize: '10px' },
+        },
+      }
+    }).filter((a): a is NonNullable<typeof a> => a !== null)
+
     return {
       chart: {
         type: 'line',
@@ -65,43 +73,63 @@ export function TrajectoryChart({ periods, series, yUnit }: ChartProps) {
       colors: [css.accent, css.baseline],
       stroke: {
         width: [3, 1.5],
-        dashArray: firstCrash >= 0 ? [0, 0] : [0, 0],
         curve: 'smooth',
       },
+      // markers are the click targets for click-to-place (secondary path);
+      // onClick receives (event, chartContext, {dataPointIndex, seriesIndex})
+      // at runtime; the type only declares the first arg, so narrow the rest.
+      markers: onClickPeriod
+        ? {
+            size: 4,
+            hover: { size: 6 },
+            onClick: (e?: unknown) => {
+              if (e && typeof e === 'object' && 'dataPointIndex' in e) {
+                const idx = (e as { dataPointIndex?: number }).dataPointIndex
+                if (idx !== undefined) onClickPeriod(periods[idx]!.period)
+              }
+            },
+          }
+        : { size: 0 },
       grid: { borderColor: css.grid },
       xaxis: {
         type: 'category',
         categories: periods.map((p) => p.label),
-        labels: { style: { colors: css.muted } },
+        labels: { style: { colors: css.muted }, rotate: -45 },
         axisBorder: { color: css.grid },
         axisTicks: { color: css.grid },
+        tickPlacement: 'on',
       },
       yaxis: {
         title: { text: yTitle, style: { color: css.muted } },
         labels: { style: { colors: css.muted } },
       },
       legend: { show: false },
-      tooltip: { theme: 'dark' },
+      // intersect:true makes markers interactive (removes no-pointer-events),
+      // required for click-to-place via dataPointSelection. shared must be
+      // false with intersect (ApexCharts constraint).
+      tooltip: { theme: 'dark', shared: false, intersect: true },
       dataLabels: { enabled: false },
-      markers: { size: 0 },
       fill: { opacity: [1, 1] },
-      // crash zone: dashed/faded beyond the first crashed period
-      annotations: firstCrash >= 0 ? {
-        yaxis: [
-          {
-            y: 60,
-            borderColor: css.red,
-            strokeDashArray: 4,
-            label: { text: 'model breakdown (wash > 60)', style: { color: '#fff', background: css.red } },
-          },
-        ],
-      } : {},
+      annotations: {
+        xaxis: xAnnotations,
+        yaxis:
+          firstCrash >= 0
+            ? [
+                {
+                  y: 60,
+                  borderColor: css.red,
+                  strokeDashArray: 4,
+                  label: { text: 'model breakdown (wash > 60)', style: { color: '#fff', background: css.red } },
+                },
+              ]
+            : [],
+      },
     }
-  }, [periods, yUnit, css])
+  }, [periods, treated, baseline, treatmentPeriods, yUnit, css, onClickPeriod])
 
   const seriesData = [
-    { name: 'With treatments', data: series.treatment },
-    { name: 'No treatment (baseline)', data: series.baseline },
+    { name: 'With treatments', data: treated },
+    { name: 'No treatment (baseline)', data: baseline },
   ]
 
   return <ReactApexChart options={options} series={seriesData} type="line" height={420} />

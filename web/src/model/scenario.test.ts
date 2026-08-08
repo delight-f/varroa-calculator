@@ -69,4 +69,56 @@ describe('runScenario', () => {
     const r = runScenario({ colonyType: 'f', washCount: 40, startMonth: 'Jun', immigrationSetting: 0, southern: false })
     expect(r.periods.some((p) => p.crashed)).toBe(true)
   })
+
+  it('with no treatments the treated line equals the baseline', () => {
+    const r = runScenario({ colonyType: 'd', washCount: 10, startMonth: 'Jun', immigrationSetting: 0, southern: false })
+    for (let i = 0; i < 24; i++) {
+      expect(r.treatedWash[i]!).toBeCloseTo(r.baselineWash[i]!, 9)
+    }
+  })
+
+  it('a treatment bends the treated line below the baseline from its period on', () => {
+    const r = runScenario({
+      colonyType: 'd',
+      washCount: 10,
+      startMonth: 'Jun',
+      immigrationSetting: 0,
+      southern: false,
+      treatments: [{ id: 1, month: 'Sep', productId: 'apivar' }],
+    })
+    // window starts at Jun (period 15); Sep is period 21 -> index 6
+    expect(r.periods[6]!.label).toBe('Sep')
+    // before the treatment (window Jun..Aug) the lines match
+    for (let i = 0; i < 6; i++) {
+      expect(r.treatedWash[i]!).toBeCloseTo(r.baselineWash[i]!, 6)
+    }
+    // the treatment period itself: wash is computed from start-of-period mites,
+    // so it equals the baseline; the bend shows from the next period on
+    expect(r.treatedWash[6]!).toBeCloseTo(r.baselineWash[6]!, 6)
+    // strictly below during the active divergence window (Sep..Oct)
+    for (let i = 7; i < 10; i++) {
+      expect(r.treatedWash[i]!).toBeLessThan(r.baselineWash[i]!)
+    }
+    // at or below for the rest of the year (colony can crash both lines to
+    // near-zero in winter, where the wash counts coincide)
+    for (let i = 10; i < 24; i++) {
+      expect(r.treatedWash[i]!).toBeLessThanOrEqual(r.baselineWash[i]!)
+    }
+  })
+
+  it('same-period treatments compose: one vs two treatments differ', () => {
+    const one = runScenario({
+      colonyType: 'd', washCount: 10, startMonth: 'Jun', immigrationSetting: 0, southern: false,
+      treatments: [{ id: 1, month: 'Sep', productId: 'apivar' }],
+    })
+    const two = runScenario({
+      colonyType: 'd', washCount: 10, startMonth: 'Jun', immigrationSetting: 0, southern: false,
+      treatments: [
+        { id: 1, month: 'Sep', productId: 'apivar' },
+        { id: 2, month: 'Sep', productId: 'oav-broodless' },
+      ],
+    })
+    const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0)
+    expect(sum(two.treatedWash)).toBeLessThan(sum(one.treatedWash))
+  })
 })

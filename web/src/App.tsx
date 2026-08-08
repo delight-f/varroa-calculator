@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react'
 import { ControlsPanel } from './components/ControlsPanel'
 import type { ControlsState } from './components/ControlsPanel'
-import { TrajectoryChart, buildSeries } from './components/TrajectoryChart'
+import { TreatmentPlanSection } from './components/TreatmentPlanSection'
+import { TrajectoryChart } from './components/TrajectoryChart'
 import { runScenario } from './model/scenario'
+import { groupTreatmentsByPeriod } from './model/treatmentPlan'
+import type { TreatmentEntry } from './model/treatmentPlan'
 import { MONTH_NAMES, isMonthName } from './model/months'
 import type { MonthName } from './model/months'
 
@@ -25,8 +28,11 @@ function initialControls(): ControlsState {
   }
 }
 
+let nextTreatmentId = 1
+
 function App() {
   const [controls, setControls] = useState<ControlsState>(initialControls)
+  const [treatments, setTreatments] = useState<TreatmentEntry[]>([])
 
   const scenario = useMemo(
     () =>
@@ -36,13 +42,23 @@ function App() {
         startMonth: controls.month,
         immigrationSetting: controls.immigrationSetting,
         southern: controls.southern,
+        treatments,
       }),
-    [controls],
+    [controls, treatments],
   )
 
-  // Phase 3: no treatments yet (T7). The treatment series mirrors the baseline
-  // (bold blue) so both lines are visible; T7 will make it diverge.
-  const series = useMemo(() => buildSeries(scenario.periods, 'wash', 0), [scenario])
+  const addTreatment = (month: MonthName, productId: string) => {
+    setTreatments((ts) => [...ts, { id: nextTreatmentId++, month, productId }])
+  }
+  const removeTreatment = (id: number) => {
+    setTreatments((ts) => ts.filter((t) => t.id !== id))
+  }
+
+  // x-axis tick/flag markers: group treatments by model period
+  const markers = useMemo(
+    () => groupTreatmentsByPeriod(treatments, controls.southern),
+    [treatments, controls.southern],
+  )
 
   const update = (patch: Partial<ControlsState>) => setControls((c) => ({ ...c, ...patch }))
 
@@ -53,11 +69,29 @@ function App() {
         <p className="app-subtitle">Project your hive's mite population over the coming year</p>
       </header>
       <main className="app-body">
-        <ControlsPanel state={controls} onChange={update} />
+        <ControlsPanel state={controls} onChange={update}>
+          <TreatmentPlanSection
+            treatments={treatments}
+            onAdd={addTreatment}
+            onRemove={removeTreatment}
+          />
+        </ControlsPanel>
         <section className="chart-area">
           <div className="banner-slot" />
           <div className="chart-card">
-            <TrajectoryChart periods={scenario.periods} series={series} yUnit="wash" />
+            <TrajectoryChart
+              periods={scenario.periods}
+              treated={scenario.treatedWash}
+              baseline={scenario.baselineWash}
+              treatmentPeriods={markers}
+              yUnit="wash"
+              onClickPeriod={(period) => {
+                // secondary path: click a point -> place the currently selected
+                // product on that month (default Apivar). The form remains primary.
+                const label = scenario.periods.find((p) => p.period === period)?.label
+                if (label) addTreatment(label as MonthName, 'apivar')
+              }}
+            />
           </div>
         </section>
       </main>
