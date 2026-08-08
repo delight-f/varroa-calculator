@@ -178,3 +178,17 @@ python3 -m unittest discover -s tests -v
 - **Corrected-variant tests** assert: parity with the faithful baseline where no correction applies; each fix changes exactly the intended quantity; the southern rotation is internally coherent; edge cases (no brood, no bees, OOB immigration) are handled without sentinel hacks.
 
 When changing the faithful model, the proof is: `python3 scripts/validate.py <workbook>` and confirm all 24 periods still match within tolerance. Any edit that breaks this contract (unless explicitly intended) is a regression. When changing the corrected variant, run the unittest suite.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues in `delight-f/varroa-calculator`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical roles: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` at the repo root, ADRs in `docs/adr/`. See `docs/agents/domain.md`.
