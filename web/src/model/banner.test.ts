@@ -1,10 +1,11 @@
 /**
  * Tests for the banner state function — all four states with known
- * trajectory shapes.
+ * trajectory shapes, plus the season-dependent treat thresholds
+ * (Honey Bee Health Coalition: 5 in autumn/winter/spring, 9 in summer).
  */
 
 import { describe, expect, it } from 'vitest'
-import { bannerState, peakWash, ADVISORY } from './banner'
+import { bannerState, peakWash, treatThresholdForMonth, ADVISORY } from './banner'
 import type { BannerInput } from './banner'
 import type { MonthName } from './months'
 
@@ -24,6 +25,29 @@ function input(over: Partial<BannerInput>): BannerInput {
     ...over,
   }
 }
+
+describe('treatThresholdForMonth', () => {
+  it('low season (Nov–May) -> 5', () => {
+    for (const m of ['Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May'] as MonthName[]) {
+      expect(treatThresholdForMonth(m, false)).toBe(ADVISORY.dangerousWashLow)
+    }
+  })
+
+  it('summer (Jun–Oct) -> 9', () => {
+    for (const m of ['Jun', 'Jul', 'Aug', 'Sep', 'Oct'] as MonthName[]) {
+      expect(treatThresholdForMonth(m, false)).toBe(ADVISORY.dangerousWashHigh)
+    }
+  })
+
+  it('southern hemisphere rotates the seasons by 6 months', () => {
+    // southern Dec = northern Jun (summer -> 9)
+    expect(treatThresholdForMonth('Dec', true)).toBe(ADVISORY.dangerousWashHigh)
+    // southern Jun = northern Dec (low season -> 5)
+    expect(treatThresholdForMonth('Jun', true)).toBe(ADVISORY.dangerousWashLow)
+    // southern May = northern Nov (low season -> 5)
+    expect(treatThresholdForMonth('May', true)).toBe(ADVISORY.dangerousWashLow)
+  })
+})
 
 describe('peakWash', () => {
   it('finds the peak and its month (first occurrence)', () => {
@@ -65,11 +89,36 @@ describe('bannerState', () => {
     expect(s.title).toBe('Trajectory crashes')
   })
 
-  it('red: already dangerous when start wash is at/above the treat threshold', () => {
-    const s = bannerState(input({ startWash: ADVISORY.dangerousWash }))
+  it('red: already dangerous at/above the summer threshold (9)', () => {
+    // labels start Jun (summer) -> threshold 9
+    const s = bannerState(input({ startWash: 9 }))
     expect(s.colour).toBe('red')
     expect(s.icon).toBe('alert-octagon')
     expect(s.title).toBe('Already dangerous')
+  })
+
+  it('red: already dangerous at/above the low-season threshold (5)', () => {
+    // labels start Nov -> low season -> threshold 5
+    const winterLabels: MonthName[] = [
+      'Nov', 'Nov', 'Dec', 'Dec', 'Jan', 'Jan', 'Feb', 'Feb', 'Mar', 'Mar',
+      'Apr', 'Apr', 'May', 'May', 'Jun', 'Jun', 'Jul', 'Jul', 'Aug', 'Aug',
+      'Sep', 'Sep', 'Oct', 'Oct',
+    ]
+    const s = bannerState(input({ startWash: 5, labels: winterLabels }))
+    expect(s.colour).toBe('red')
+    expect(s.title).toBe('Already dangerous')
+  })
+
+  it('a wash of 6 in winter is dangerous but 6 in summer is not', () => {
+    const winterLabels: MonthName[] = [
+      'Nov', 'Nov', 'Dec', 'Dec', 'Jan', 'Jan', 'Feb', 'Feb', 'Mar', 'Mar',
+      'Apr', 'Apr', 'May', 'May', 'Jun', 'Jun', 'Jul', 'Jul', 'Aug', 'Aug',
+      'Sep', 'Sep', 'Oct', 'Oct',
+    ]
+    const winter = bannerState(input({ startWash: 6, labels: winterLabels }))
+    expect(winter.colour).toBe('red')
+    const summer = bannerState(input({ startWash: 6, labels })) // starts Jun
+    expect(summer.colour).not.toBe('red')
   })
 
   it('already-dangerous takes precedence over crash', () => {
@@ -87,9 +136,10 @@ describe('bannerState', () => {
     expect(s.detail).toContain('Jul') // peak 8 at index 2 -> 'Jul' (labels start Jun)
   })
 
-  it('green detail reports the peak and month', () => {
+  it('green detail reports the peak, month, and season threshold', () => {
     const s = bannerState(input({ startWash: 2, washTrajectory: [2, 4, 6, 5], hasTreatments: true }))
     expect(s.detail).toContain('6')
     expect(s.detail).toContain('Jul') // peak 6 at index 2 -> 'Jul'
+    expect(s.detail).toContain('9') // Jul is summer -> threshold 9
   })
 })

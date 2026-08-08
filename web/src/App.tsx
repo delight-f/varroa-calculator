@@ -72,8 +72,9 @@ function App() {
         labels: scenario.periods.map((p) => p.label),
         hasTreatments: treatments.length > 0,
         crashed: scenario.periods.some((p) => p.crashed),
+        southern: controls.southern,
       }),
-    [scenario, treatments.length, controls.washCount],
+    [scenario, treatments.length, controls.washCount, controls.southern],
   )
 
   return (

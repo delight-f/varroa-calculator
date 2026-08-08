@@ -60,7 +60,16 @@ ADR-0003). Tickets in the issue tracker assume these decisions.
 - **Treatment placement**: form-based add (dropdown + month + button) as the
   primary path; click-to-place on the chart as a secondary path. Both write
   to the same treatment-plan state.
+- **Treat thresholds (Honey Bee Health Coalition)**: treat at a wash count of
+  5 in autumn/winter/spring and 9 in summer. "Summer" = Jun–Oct (northern),
+  rotating 6 months in the southern hemisphere. Implemented in
+  `web/src/model/banner.ts` (`treatThresholdForMonth`); the "already
+  dangerous" state uses the threshold at the start month, and the "under
+  control" state uses the threshold at the peak month. Confirmed by the
+  author 2026-08-08.
 
 ## Open questions
 
-- **Treatment-advisory thresholds.** The banner uses "watch closely" (~3 mites/wash) and "treat now" (~9 mites/wash) as extension-service conventions. These are NOT confirmed — user to verify the correct threshold values for the target audience and region. The model-breakdown thresholds (wash > 60, cell invasion > 50%) are confirmed from the workbook.
+- None open. (The treatment-advisory thresholds were confirmed on 2026-08-08:
+  Honey Bee Health Coalition — treat at 5 in autumn/winter/spring, 9 in
+  summer.)
