@@ -20,3 +20,9 @@ Thumbs.db
 
 # Handoff documents (session-local, not for the repo)
 handoff.md
+
+# Web app (Vite / node)
+node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo
+*.local
