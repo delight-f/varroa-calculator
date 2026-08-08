@@ -220,7 +220,7 @@ export function TrajectoryChart({
                   x: periods[firstCrash]!.label,
                   x2: periods[periods.length - 1]!.label,
                   fillColor: css.red,
-                  opacity: 0.08,
+                  opacity: 0.18,
                   strokeDashArray: 4,
                   label: {
                     text: 'crash zone',
