@@ -168,7 +168,13 @@ export function TrajectoryChart({
       },
       yaxis: {
         title: { text: yTitle, style: { color: css.muted } },
-        labels: { style: { colors: css.muted } },
+        labels: {
+          style: { colors: css.muted },
+          // integer-only ticks: no decimal points (wash counts and mite
+          // populations are whole numbers; full float precision inflates the
+          // left margin and pushes the title off-screen)
+          formatter: (val: number) => Math.round(val).toString(),
+        },
       },
       legend: {
         show: true,
