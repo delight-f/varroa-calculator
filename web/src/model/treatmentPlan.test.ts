@@ -42,30 +42,34 @@ describe('planToKills', () => {
   it('maps a month placement to the first period of that month (north)', () => {
     // Nov -> period 1, Jun -> period 15 (first half-month labeled Jun)
     const plan = [entry(1, 'Jun', 'apivar')]
-    const kills = planToKills(plan, false)
+    const kills = planToKills(plan)
     expect(kills[14]).toBeCloseTo(0.95, 12) // period 15
     expect(kills.reduce((a, b) => a + b, 0)).toBeCloseTo(0.95, 12)
   })
 
-  it('applies hemisphere rotation: Jun south -> northern period 3 (Dec)', () => {
+  it('keeps the kill on the northern period for the month (southern rotation is the model\'s job)', () => {
     const plan = [entry(1, 'Jun', 'apivar')]
-    const kills = planToKills(plan, true)
-    // southern monthToStartPeriod('Jun', true) = period 3 (southern Jun = northern Dec)
-    expect(kills[2]).toBeCloseTo(0.95, 12)
-    expect(kills.reduce((a, b) => a + b, 0)).toBeCloseTo(0.95, 12)
+    // northern-indexed array: Jun -> period 15, regardless of hemisphere.
+    // The model's _source_period applies the rotation when reading the kill
+    // (issue #16: mapping the month through the southern rotation here would
+    // double-rotate and land the treatment 12 periods late).
+    const north = planToKills(plan)
+    const south = planToKills(plan)
+    expect(north[14]).toBeCloseTo(0.95, 12) // period 15
+    expect(south).toEqual(north)
   })
 
   it('same-period treatments compose multiplicatively via composeKills', () => {
     // two treatments on Jun: 0.95 and 0.5 -> combined 1 - (0.05)(0.5) = 0.975
     const plan = [entry(1, 'Jun', 'apivar'), entry(2, 'Jun', 'sugar-dusting')]
-    const kills = planToKills(plan, false)
+    const kills = planToKills(plan)
     expect(kills[14]).toBeCloseTo(composeKills([0.95, 0.25]), 12)
     expect(kills[14]).toBeCloseTo(0.9625, 12) // 1 - 0.05*0.75
   })
 
   it('different-period treatments stay on their own periods', () => {
     const plan = [entry(1, 'Apr', 'oav-broodless'), entry(2, 'Sep', 'apivar')]
-    const kills = planToKills(plan, false)
+    const kills = planToKills(plan)
     // Apr -> period 11, Sep -> period 21
     expect(kills[10]).toBeCloseTo(0.95, 12)
     expect(kills[20]).toBeCloseTo(0.95, 12)
@@ -73,30 +77,29 @@ describe('planToKills', () => {
   })
 
   it('empty plan -> all zeros', () => {
-    const kills = planToKills([], false)
+    const kills = planToKills([])
     expect(kills).toEqual(Array(24).fill(0))
   })
 
-  it('southern rotation moves the same plan to different periods', () => {
+  it('southern run places the same plan on the same northern periods', () => {
     const plan = [entry(1, 'Aug', 'apivar')]
-    const north = planToKills(plan, false)
-    const south = planToKills(plan, true)
+    const north = planToKills(plan)
+    const south = planToKills(plan)
     const nIdx = north.indexOf(0.95)
     const sIdx = south.indexOf(0.95)
-    expect(nIdx).toBe(18) // Aug -> period 19
-    expect(sIdx).toBe(6) // southern Aug -> period 7
-    expect(nIdx).not.toBe(sIdx)
+    expect(nIdx).toBe(18) // Aug -> period 19 (northern index)
+    expect(sIdx).toBe(18) // identical: the model rotates, planToKills does not
   })
 })
 
 describe('treatmentPeriods', () => {
   it('lists unique model periods with treatments, in order placed', () => {
     const plan = [entry(1, 'Jun', 'apivar'), entry(2, 'Jun', 'sugar-dusting'), entry(3, 'Sep', 'apiguard')]
-    expect(treatmentPeriods(plan, false)).toEqual([15, 21])
+    expect(treatmentPeriods(plan)).toEqual([15, 21])
   })
 
   it('empty plan -> no markers', () => {
-    expect(treatmentPeriods([], false)).toEqual([])
+    expect(treatmentPeriods([])).toEqual([])
   })
 })
 

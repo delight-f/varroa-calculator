@@ -63,7 +63,7 @@ export function runScenario(input: ScenarioInput): ScenarioResult {
 
   const treatedKills =
     input.treatmentKills ??
-    planToKills(input.treatments ?? [], input.southern)
+    planToKills(input.treatments ?? [])
 
   const modelConfig: Record<string, unknown> = {
     colony_type: input.colonyType,

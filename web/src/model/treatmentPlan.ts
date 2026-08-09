@@ -2,8 +2,11 @@
  * Treatment-plan logic: user entries -> per-period kill fractions.
  *
  * A plan is a list of (month, productId) entries. The model needs a 24-element
- * per-period kill array with hemisphere rotation (a treatment placed on a
- * calendar month lands on the northern/southern period for that month).
+ * per-period kill array. The array is **northern-indexed**: a treatment placed
+ * on a calendar month lands on the northern period for that month, and the
+ * model's `_source_period` applies the southern rotation (issue #16 — the
+ * month must NOT be mapped through the southern rotation here, or southern
+ * runs would double-rotate and land treatments 12 periods late).
  * Same-month treatments compose multiplicatively via composeKills.
  */
 
@@ -29,13 +32,15 @@ export interface TreatmentInput extends ScenarioInput {
 /**
  * Map a treatment plan onto the model's 24-element per-period kill array.
  * A treatment placed on a calendar month applies to the first period whose
- * label is that month (hemisphere-aware). Same-period kills compose
- * multiplicatively. Returns 24 entries, one per model period (1..24).
+ * label is that month. The array is northern-indexed: the month maps to its
+ * northern period (southern flag NOT applied — the model's `_source_period`
+ * handles rotation, issue #16). Same-period kills compose multiplicatively.
+ * Returns 24 entries, one per model period (1..24).
  */
-export function planToKills(treatments: readonly TreatmentEntry[], southern: boolean): number[] {
+export function planToKills(treatments: readonly TreatmentEntry[]): number[] {
   const kills = Array(24).fill(0) as number[]
   for (const t of treatments) {
-    const period = monthToStartPeriod(t.month, southern) // first period of that month
+    const period = monthToStartPeriod(t.month, false) // northern period; model rotates
     kills[period - 1] = composeKills([kills[period - 1]!, treatmentProduct(t.productId).killFraction])
   }
   return kills
@@ -43,13 +48,15 @@ export function planToKills(treatments: readonly TreatmentEntry[], southern: boo
 
 /**
  * Period numbers (1..24, model-absolute) on which the plan applies a treatment.
- * Used for the chart's x-axis tick/flag markers (ADR-0003).
+ * Used for the chart's x-axis tick/flag markers (ADR-0003). Northern-indexed
+ * like `planToKills` (issue #16): the month maps to its northern period; the
+ * model's `_source_period` applies the southern rotation.
  */
-export function treatmentPeriods(treatments: readonly TreatmentEntry[], southern: boolean): number[] {
+export function treatmentPeriods(treatments: readonly TreatmentEntry[]): number[] {
   const seen = new Set<number>()
   const out: number[] = []
   for (const t of treatments) {
-    const period = monthToStartPeriod(t.month, southern)
+    const period = monthToStartPeriod(t.month, false)
     if (!seen.has(period)) {
       seen.add(period)
       out.push(period)
@@ -61,11 +68,10 @@ export function treatmentPeriods(treatments: readonly TreatmentEntry[], southern
 /** Treatments grouped by their model period (for chart markers). */
 export function groupTreatmentsByPeriod(
   treatments: readonly TreatmentEntry[],
-  southern: boolean,
 ): Array<{ period: number; entries: TreatmentEntry[] }> {
-  return treatmentPeriods(treatments, southern).map((period) => ({
+  return treatmentPeriods(treatments).map((period) => ({
     period,
-    entries: treatments.filter((t) => monthToStartPeriod(t.month, southern) === period),
+    entries: treatments.filter((t) => monthToStartPeriod(t.month, false) === period),
   }))
 }
 

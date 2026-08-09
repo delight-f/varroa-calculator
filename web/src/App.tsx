@@ -59,7 +59,7 @@ function App() {
 
   // x-axis tick/flag markers: group treatments by model period
   const markers = useMemo(
-    () => groupTreatmentsByPeriod(treatments, controls.southern),
+    () => groupTreatmentsByPeriod(treatments),
     [treatments, controls.southern],
   )
 
