@@ -111,15 +111,20 @@ export function runScenario(input: ScenarioInput): ScenarioResult {
   const treatedMites = window.map((p) => byPeriod.get(p)!.mites_end)
   const baselineMites = window.map((p) => baselineRun.periods[p - 1]!.mites_end)
 
-  // First window index at which the trajectory collapses (issue #14). The
-  // model's `crashed` flag is sticky and fires on cell invasion even at
-  // moderate wash counts, so the flag alone truncates too early; and a low
-  // starting wash alone is already below any collapse floor. The line ends
-  // at the collapse: the first period, at or after the flag first fires,
-  // where the wash drops below max(1, 10% of the window's peak wash). That
-  // is the count-down-to-zero — the rebuild after it is the misleading
-  // rebound to hide. If the flag never fires, or the wash never drops below
-  // the floor after it, the trajectory renders the full year.
+  // First window index at which the *baseline* (no-treatment) line collapses
+// (issue #14). The model's `crashed` flag is sticky and fires on cell
+// invasion even at moderate wash counts, so the flag alone truncates too
+// early; and a low starting wash alone is already below any collapse floor.
+// The baseline ends at the collapse: the first period, at or after the flag
+// first fires, where the wash drops below max(1, 10% of the window's peak).
+// That is the count-down-to-zero; the rebuild after it is the misleading
+// rebound to hide. If the flag never fires, or the wash never drops below
+// the floor after it, the baseline renders the full year.
+//
+// The treated line always renders the full year: a treatment-induced drop to
+// zero is the intervention working, not a crash, and the user's plan should
+// show its full effect (drop + recovery). Only the no-treatment baseline
+// truncates at its genuine collapse.
   const collapseIndex = (washArr: number[], flags: boolean[]) => {
     const flagAt = flags.findIndex(Boolean)
     if (flagAt < 0) return null
@@ -128,7 +133,6 @@ export function runScenario(input: ScenarioInput): ScenarioResult {
     const at = washArr.findIndex((w, i) => i >= flagAt && w < floor)
     return at >= 0 ? at : null
   }
-  const treatedCrashIndex = collapseIndex(treatedWash, window.map((p) => byPeriod.get(p)!.crashed))
   const baselineCrashIndex = collapseIndex(baselineWash, window.map((p) => baselineRun.periods[p - 1]!.crashed))
   return {
     startPeriod,
@@ -139,7 +143,7 @@ export function runScenario(input: ScenarioInput): ScenarioResult {
     baselineWash,
     treatedMites,
     baselineMites,
-    treatedCrashIndex,
+    treatedCrashIndex: null,
     baselineCrashIndex,
   }
 }

@@ -70,33 +70,46 @@ describe('runScenario', () => {
     expect(r.periods.some((p) => p.crashed)).toBe(true)
   })
 
-  it('ends the line at the collapse, not the flag onset (issue #14)', () => {
+  it('ends the baseline at the collapse, not the flag onset (issue #14)', () => {
     // wash-10 start in Aug: the sticky invasion flag fires at idx 1 (wash
     // 17.7) but the wash keeps climbing to 29, then collapses to ~0 at idx 6
-    // and rebuilds. The line must end at the collapse (idx 6), not the flag.
+    // and rebuilds. The baseline must end at the collapse (idx 6), not the
+    // flag. The treated line (no treatment here) renders the full year.
     const r = runScenario({ colonyType: 'd', washCount: 10, startMonth: 'Aug', immigrationSetting: 0, southern: false })
-    expect(r.treatedCrashIndex).toBe(6)
     expect(r.baselineCrashIndex).toBe(6)
+    expect(r.treatedCrashIndex).toBeNull()
     // the wash at the collapse index is at/near zero
-    expect(r.treatedWash[r.treatedCrashIndex!]!).toBeLessThan(1)
+    expect(r.baselineWash[r.baselineCrashIndex!]!).toBeLessThan(1)
   })
 
-  it('ends the line at the collapse for a high starting wash too', () => {
+  it('ends the baseline at the collapse for a high starting wash too', () => {
     // wash-40 start in Aug: the flag fires at idx 0 (sticky invasion) but the
-    // wash peaks at 71 and only collapses to ~0 at idx 6 — the line must
+    // wash peaks at 71 and only collapses to ~0 at idx 6 — the baseline must
     // render the build-up and end at the collapse, not truncate to one point.
     const r = runScenario({ colonyType: 'd', washCount: 40, startMonth: 'Aug', immigrationSetting: 0, southern: false })
-    expect(r.treatedCrashIndex).toBe(6)
     expect(r.baselineCrashIndex).toBe(6)
+    expect(r.treatedCrashIndex).toBeNull()
   })
 
   it('hides the rebound after a sustained breakdown (issue example)', () => {
     // colony f, wash 40, Jun: wash peaks at 165 then collapses to ~6 at idx
-    // 10 and rebuilds to 32. The line ends at the collapse, hiding the
+    // 10 and rebuilds to 32. The baseline ends at the collapse, hiding the
     // misleading rebound.
     const r = runScenario({ colonyType: 'f', washCount: 40, startMonth: 'Jun', immigrationSetting: 0, southern: false })
-    expect(r.treatedCrashIndex).toBe(10)
-    expect(r.treatedWash[r.treatedCrashIndex!]!).toBeLessThan(20)
+    expect(r.baselineCrashIndex).toBe(10)
+    expect(r.baselineWash[r.baselineCrashIndex!]!).toBeLessThan(20)
+  })
+
+  it('the treated line renders the full year even when the treatment drops the wash', () => {
+    // a treatment that drops the wash to (near) zero is the intervention
+    // working, not a crash — the treated line must render the full year
+    // (issue #14: only the no-treatment baseline truncates).
+    const r = runScenario({
+      colonyType: 'd', washCount: 40, startMonth: 'Aug', immigrationSetting: 0, southern: false,
+      treatments: [{ id: 1, month: 'Aug', productId: 'apivar' }],
+    })
+    expect(r.treatedCrashIndex).toBeNull()
+    expect(r.baselineCrashIndex).toBe(6)
   })
 
   it('with no treatments the treated line equals the baseline', () => {
