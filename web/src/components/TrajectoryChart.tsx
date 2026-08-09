@@ -46,7 +46,9 @@ export function TrajectoryChart({
   onClickPeriod,
 }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const chartRef = useRef<ApexCharts | null>(null)
   const [height, setHeight] = useState(420)
+  const [gridWidth, setGridWidth] = useState(0)
 
   // Size the chart to fill its container (the chart-card), so the plot area
   // stretches to match the controls panel height on desktop instead of
@@ -60,6 +62,23 @@ export function TrajectoryChart({
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+
+  // The crash zone needs the grid's pixel width (gridWidth/24 px per
+  // category). Read it from the ApexCharts instance after render and when the
+  // container resizes.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const update = () => {
+      const gw = (chartRef.current as unknown as { w?: { globals?: { gridWidth?: number } } })
+        ?.w?.globals?.gridWidth
+      if (typeof gw === 'number' && gw > 0) setGridWidth(gw)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [height])
   const css = useMemo(() => {
     const s = getComputedStyle(document.documentElement)
     return {
@@ -222,19 +241,35 @@ export function TrajectoryChart({
           ...(firstCrash >= 0
             ? [
                 {
-                  // ApexCharts resolves x-axis annotation x/x2 against the
-                  // category *labels* (getStringX), not indices. Passing the
-                  // month label at the crash point and the last period's label
-                  // makes the band span from the crash month to the chart end.
-                  x: periods[firstCrash]!.label,
-                  x2: periods[periods.length - 1]!.label,
+                  // The crash zone starts at the exact period where the model
+                  // flags a crash (wash > 60 or cell invasion > 50%), not at
+                  // the start of that calendar month. Category-label based x
+                  // loses precision (labels repeat per month), so use pixel
+                  // positions: category width = gridWidth/24, crash index i is
+                  // at i * categoryWidth from the grid origin.
+                  x:
+                    gridWidth > 0
+                      ? `${(firstCrash / periods.length) * gridWidth}px`
+                      : periods[firstCrash]!.label,
+                  x2:
+                    gridWidth > 0
+                      ? `${gridWidth}px`
+                      : periods[periods.length - 1]!.label,
                   fillColor: css.red,
                   opacity: 0.18,
                   strokeDashArray: 4,
                   label: {
                     text: 'crash zone',
+                    orientation: 'horizontal' as const,
                     position: 'top' as const,
-                    style: { color: css.red, fontSize: '10px' },
+                    // anchor at the band's right end so it reads like the
+                    // horizontal y-axis annotation labels on the chart's right
+                    offsetX:
+                      gridWidth > 0
+                        ? ((periods.length - firstCrash) / periods.length) * gridWidth - 8
+                        : 0,
+                    textAnchor: 'end' as const,
+                    style: { color: css.red, fontSize: '10px', background: 'transparent' },
                   },
                 },
               ]
@@ -243,7 +278,7 @@ export function TrajectoryChart({
         yaxis: yAnnotations,
       },
     }
-  }, [periods, treated, baseline, treatedMites, baselineMites, treatmentPeriods, yUnit, css, onClickPeriod])
+  }, [periods, treated, baseline, treatedMites, baselineMites, treatmentPeriods, yUnit, css, onClickPeriod, gridWidth])
 
   const seriesData = [
     { name: 'With treatments', data: active },
@@ -252,7 +287,13 @@ export function TrajectoryChart({
 
   return (
     <div ref={containerRef} className="chart-fill">
-      <ReactApexChart options={options} series={seriesData} type="line" height={height} />
+      <ReactApexChart
+        chartRef={chartRef}
+        options={options}
+        series={seriesData}
+        type="line"
+        height={height}
+      />
     </div>
   )
 }
