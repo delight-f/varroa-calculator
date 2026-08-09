@@ -47,6 +47,13 @@ export interface ScenarioResult {
   treatedMites: number[]
   /** per-period total mite population with no treatments (faint baseline) */
   baselineMites: number[]
+  /**
+   * Window index of the first crash per trajectory, or null when it never
+   * crashes (issue #14). The chart ends each line at its own crash point and
+   * the banner peak covers only the truncated window.
+   */
+  treatedCrashIndex: number | null
+  baselineCrashIndex: number | null
 }
 
 /**
@@ -104,5 +111,22 @@ export function runScenario(input: ScenarioInput): ScenarioResult {
   const treatedMites = window.map((p) => byPeriod.get(p)!.mites_end)
   const baselineMites = window.map((p) => baselineRun.periods[p - 1]!.mites_end)
 
-  return { startPeriod, initialMites, periods, byPeriod, treatedWash, baselineWash, treatedMites, baselineMites }
+  // First window index at which each trajectory crashes (issue #14). The
+  // treated line ends at its own crash, the baseline at its own — each
+  // trajectory has its own `crashed` flags (the shared `periods` array is
+  // the treated run's).
+  const treatedCrashIndex = window.findIndex((p) => byPeriod.get(p)!.crashed)
+  const baselineCrashIndex = window.findIndex((p) => baselineRun.periods[p - 1]!.crashed)
+  return {
+    startPeriod,
+    initialMites,
+    periods,
+    byPeriod,
+    treatedWash,
+    baselineWash,
+    treatedMites,
+    baselineMites,
+    treatedCrashIndex: treatedCrashIndex >= 0 ? treatedCrashIndex : null,
+    baselineCrashIndex: baselineCrashIndex >= 0 ? baselineCrashIndex : null,
+  }
 }

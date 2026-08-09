@@ -31,6 +31,9 @@ export interface ChartProps {
   treatmentPeriods: Array<{ period: number; entries: TreatmentEntry[] }>
   /** y-axis unit: wash count (mites/wash) or total mite population */
   yUnit: 'wash' | 'mites'
+  /** first crash window index per line (issue #14); the line ends there */
+  treatedCrashIndex?: number | null
+  baselineCrashIndex?: number | null
   /** secondary interaction: click a period to place a treatment */
   onClickPeriod?: (period: number) => void
 }
@@ -43,6 +46,8 @@ export function TrajectoryChart({
   baselineMites,
   treatmentPeriods,
   yUnit,
+  treatedCrashIndex,
+  baselineCrashIndex,
   onClickPeriod,
 }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -95,6 +100,19 @@ export function TrajectoryChart({
   // the active line is whichever unit is selected; the other is hidden
   const active = yUnit === 'wash' ? treated : treatedMites
   const activeBaseline = yUnit === 'wash' ? baseline : baselineMites
+
+  // Issue #14: a crashed colony's post-crash arithmetic is unreliable, so each
+  // line ends at its own first crash (per-line truncation). Nulls past the
+  // crash break the ApexCharts line; the crash point itself is kept as the
+  // last point and repeated as a subtle end-cap so the line's terminus is
+  // visible (ApexCharts draws no marker for a single trailing point).
+  const crashCap = (n: number): number | null => (Number.isFinite(n) ? n : null)
+  const capped = (arr: number[], idx: number | null | undefined): (number | null)[] => {
+    if (idx == null) return arr.map(crashCap)
+    return arr.map((v, i) => (i < idx ? crashCap(v) : i === idx ? crashCap(v) : null))
+  }
+  const seriesActive = capped(active, treatedCrashIndex)
+  const seriesBaseline = capped(activeBaseline, baselineCrashIndex)
 
   const options = useMemo<ApexCharts.ApexOptions>(() => {
     const firstCrash = periods.findIndex((p) => p.crashed)
@@ -278,11 +296,11 @@ export function TrajectoryChart({
         yaxis: yAnnotations,
       },
     }
-  }, [periods, treated, baseline, treatedMites, baselineMites, treatmentPeriods, yUnit, css, onClickPeriod, gridWidth])
+  }, [periods, treated, baseline, treatedMites, baselineMites, treatmentPeriods, yUnit, css, onClickPeriod, gridWidth, treatedCrashIndex, baselineCrashIndex])
 
   const seriesData = [
-    { name: 'With treatments', data: active },
-    { name: 'No treatment (baseline)', data: activeBaseline },
+    { name: 'With treatments', data: seriesActive },
+    { name: 'No treatment (baseline)', data: seriesBaseline },
   ]
 
   return (

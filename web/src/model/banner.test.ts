@@ -131,6 +131,16 @@ describe('bannerState', () => {
     expect(s.title).toBe('Trajectory crashes')
   })
 
+  it('peak is computed over the truncated (pre-crash) window (issue #14)', () => {
+    // crash at index 2; the post-crash values (90, 100) must not count
+    const s = bannerState(input({ startWash: 2, washTrajectory: [2, 4, 70, 90, 100], crashIndex: 2, crashed: true }))
+    expect(s.colour).toBe('red')
+    expect(s.title).toBe('Trajectory crashes')
+    expect(s.detail).toContain('4') // pre-crash peak
+    expect(s.detail).not.toContain('90')
+    expect(s.detail).not.toContain('100')
+  })
+
   it('computes the peak month from the trajectory (not hardcoded)', () => {
     const s = bannerState(input({ startWash: 2, washTrajectory: [2, 4, 8, 6], hasTreatments: false }))
     expect(s.detail).toContain('Jul') // peak 8 at index 2 -> 'Jul' (labels start Jun)

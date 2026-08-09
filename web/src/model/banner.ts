@@ -57,6 +57,12 @@ export interface BannerInput {
   hasTreatments: boolean
   /** true if any period in the window crashed (wash > crash or cell invasion) */
   crashed: boolean
+  /**
+   * Window index of the first crash (issue #14). When set, the peak is
+   * computed only over the pre-crash portion so the banner matches the
+   * chart's truncated trajectory. Defaults to full-window when omitted.
+   */
+  crashIndex?: number | null
   /** true if the run uses southern-hemisphere seasons */
   southern?: boolean
 }
@@ -105,7 +111,10 @@ export function peakWash(
  */
 export function bannerState(input: BannerInput): BannerState {
   const { startWash, washTrajectory, labels, hasTreatments, crashed, southern } = input
-  const { peak, month } = peakWash(washTrajectory, labels)
+  // Issue #14: once a crash ends the trajectory, the peak is computed only
+  // over the truncated (pre-crash) window so the banner matches the chart.
+  const truncation = input.crashIndex ?? washTrajectory.length
+  const { peak, month } = peakWash(washTrajectory.slice(0, truncation), labels)
   const isSouthern = southern ?? false
 
   // already dangerous: the current measurement is at/above the treat
@@ -122,10 +131,13 @@ export function bannerState(input: BannerInput): BannerState {
 
   // trajectory crashes (model breakdown)
   if (crashed || peak >= ADVISORY.crashWash) {
+    // Issue #14: the trajectory ends at the crash, so report the crash month
+    // (the pre-crash peak is what the truncated chart shows).
+    const crashMonth = input.crashIndex != null ? labels[input.crashIndex] ?? null : month
     return {
       colour: 'red',
       title: 'Trajectory crashes',
-      detail: `Peak ${fmt(peak)} mites/wash${month ? ` in ${month}` : ''} — the colony is projected to collapse.`,
+      detail: `Peak ${fmt(peak)} mites/wash${month ? ` in ${month}` : ''} — the colony is projected to collapse${crashMonth ? ` in ${crashMonth}` : ''}.`,
       icon: 'alert-triangle',
     }
   }

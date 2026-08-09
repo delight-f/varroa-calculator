@@ -73,6 +73,7 @@ function App() {
         labels: scenario.periods.map((p) => p.label),
         hasTreatments: treatments.length > 0,
         crashed: scenario.periods.some((p) => p.crashed),
+        crashIndex: scenario.treatedCrashIndex,
         southern: controls.southern,
       }),
     [scenario, treatments.length, controls.washCount, controls.southern],
@@ -103,6 +104,8 @@ function App() {
               baselineMites={scenario.baselineMites}
               treatmentPeriods={markers}
               yUnit={controls.yUnit}
+              treatedCrashIndex={scenario.treatedCrashIndex}
+              baselineCrashIndex={scenario.baselineCrashIndex}
               onClickPeriod={(period) => {
                 // secondary path: click a point -> place the currently selected
                 // product on that month (default Apivar). The form remains primary.

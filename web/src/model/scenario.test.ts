@@ -70,6 +70,27 @@ describe('runScenario', () => {
     expect(r.periods.some((p) => p.crashed)).toBe(true)
   })
 
+  it('reports the per-line first crash index (issue #14)', () => {
+    // colony f, wash 40, Jun, no treatment: both lines crash (same run).
+    const f = runScenario({ colonyType: 'f', washCount: 40, startMonth: 'Jun', immigrationSetting: 0, southern: false })
+    expect(f.baselineCrashIndex).not.toBeNull()
+    expect(f.treatedCrashIndex).not.toBeNull()
+    // the crash index points at a crashed period
+    expect(f.periods[f.baselineCrashIndex!]!.crashed).toBe(true)
+    // a heavy treatment that keeps the colony below a crash leaves the treated
+    // line un-truncated while the baseline still crashes (issue #14: per-line)
+    const treated = runScenario({
+      colonyType: 'd', washCount: 10, startMonth: 'Jun', immigrationSetting: 0, southern: false,
+      treatments: [
+        { id: 1, month: 'Jun', productId: 'apivar' },
+        { id: 2, month: 'Jul', productId: 'apivar' },
+        { id: 3, month: 'Aug', productId: 'apivar' },
+      ],
+    })
+    expect(treated.baselineCrashIndex).not.toBeNull()
+    expect(treated.treatedCrashIndex).toBeNull()
+  })
+
   it('with no treatments the treated line equals the baseline', () => {
     const r = runScenario({ colonyType: 'd', washCount: 10, startMonth: 'Jun', immigrationSetting: 0, southern: false })
     for (let i = 0; i < 24; i++) {
