@@ -13,7 +13,6 @@ import type { MonthName } from './months'
 import type { PeriodResult } from './varroaModel'
 import { planToKills } from './treatmentPlan'
 import type { TreatmentEntry } from './treatmentPlan'
-import { ADVISORY } from './banner'
 
 export interface ScenarioInput {
   colonyType: string // single-letter code (d, n, p, a, b, c, r, s, f)
@@ -112,25 +111,25 @@ export function runScenario(input: ScenarioInput): ScenarioResult {
   const treatedMites = window.map((p) => byPeriod.get(p)!.mites_end)
   const baselineMites = window.map((p) => baselineRun.periods[p - 1]!.mites_end)
 
-  // First window index of a *sustained* wash breakdown (issue #14). The
-  // model's `crashed` flag is sticky (once set it stays on) and fires on cell
-  // invasion even at moderate wash counts, so it truncates far too early — a
-  // wash-40 start in Aug is flagged from the very first period. A single
-  // period above the crash threshold is also not a breakdown (a transient
-  // peak that then recovers is a healthy colony). So the line ends only at
-  // the start of a *sustained* run of wash > crashWash (>=3 consecutive
-  // periods), which is the genuine collapse. Each trajectory has its own wash
-  // array (the shared `periods` array is the treated run's).
-  const sustainedCrashAt = (washArr: number[]) => {
-    let run = 0
-    for (let i = 0; i < washArr.length; i++) {
-      run = washArr[i]! > ADVISORY.crashWash ? run + 1 : 0
-      if (run >= 3) return i - 2 // start of the sustained run
-    }
-    return -1
+  // First window index at which the trajectory collapses (issue #14). The
+  // model's `crashed` flag is sticky and fires on cell invasion even at
+  // moderate wash counts, so the flag alone truncates too early; and a low
+  // starting wash alone is already below any collapse floor. The line ends
+  // at the collapse: the first period, at or after the flag first fires,
+  // where the wash drops below max(1, 10% of the window's peak wash). That
+  // is the count-down-to-zero — the rebuild after it is the misleading
+  // rebound to hide. If the flag never fires, or the wash never drops below
+  // the floor after it, the trajectory renders the full year.
+  const collapseIndex = (washArr: number[], flags: boolean[]) => {
+    const flagAt = flags.findIndex(Boolean)
+    if (flagAt < 0) return null
+    const peak = Math.max(...washArr)
+    const floor = Math.max(1, 0.1 * peak)
+    const at = washArr.findIndex((w, i) => i >= flagAt && w < floor)
+    return at >= 0 ? at : null
   }
-  const treatedCrashIndex = sustainedCrashAt(treatedWash)
-  const baselineCrashIndex = sustainedCrashAt(baselineWash)
+  const treatedCrashIndex = collapseIndex(treatedWash, window.map((p) => byPeriod.get(p)!.crashed))
+  const baselineCrashIndex = collapseIndex(baselineWash, window.map((p) => baselineRun.periods[p - 1]!.crashed))
   return {
     startPeriod,
     initialMites,
@@ -140,7 +139,7 @@ export function runScenario(input: ScenarioInput): ScenarioResult {
     baselineWash,
     treatedMites,
     baselineMites,
-    treatedCrashIndex: treatedCrashIndex >= 0 ? treatedCrashIndex : null,
-    baselineCrashIndex: baselineCrashIndex >= 0 ? baselineCrashIndex : null,
+    treatedCrashIndex,
+    baselineCrashIndex,
   }
 }

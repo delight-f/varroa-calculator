@@ -70,29 +70,33 @@ describe('runScenario', () => {
     expect(r.periods.some((p) => p.crashed)).toBe(true)
   })
 
-  it('reports the per-line first crash index (issue #14)', () => {
-    // colony f, wash 40, Jun: a sustained wash breakdown (>=3 consecutive
-    // periods above 60) starts at window index 2 (Jul). The treated and
-    // baseline lines truncate at the same point.
-    const f = runScenario({ colonyType: 'f', washCount: 40, startMonth: 'Jun', immigrationSetting: 0, southern: false })
-    expect(f.baselineCrashIndex).not.toBeNull()
-    expect(f.treatedCrashIndex).not.toBeNull()
-    expect(f.treatedCrashIndex).toBe(f.baselineCrashIndex)
-    expect(f.treatedCrashIndex).toBe(2)
-    // the wash at the crash index exceeds the crash threshold
-    expect(f.treatedWash[f.treatedCrashIndex!]!).toBeGreaterThan(60)
+  it('ends the line at the collapse, not the flag onset (issue #14)', () => {
+    // wash-10 start in Aug: the sticky invasion flag fires at idx 1 (wash
+    // 17.7) but the wash keeps climbing to 29, then collapses to ~0 at idx 6
+    // and rebuilds. The line must end at the collapse (idx 6), not the flag.
+    const r = runScenario({ colonyType: 'd', washCount: 10, startMonth: 'Aug', immigrationSetting: 0, southern: false })
+    expect(r.treatedCrashIndex).toBe(6)
+    expect(r.baselineCrashIndex).toBe(6)
+    // the wash at the collapse index is at/near zero
+    expect(r.treatedWash[r.treatedCrashIndex!]!).toBeLessThan(1)
   })
 
-  it('does not truncate a transient peak or a healthy recovery', () => {
-    // a wash-40 start in Aug peaks briefly above 60 (idx 1) but recovers —
-    // not a sustained breakdown, so the full year renders (issue #14
-    // regression: the sticky flag truncated this to a single point).
+  it('ends the line at the collapse for a high starting wash too', () => {
+    // wash-40 start in Aug: the flag fires at idx 0 (sticky invasion) but the
+    // wash peaks at 71 and only collapses to ~0 at idx 6 — the line must
+    // render the build-up and end at the collapse, not truncate to one point.
     const r = runScenario({ colonyType: 'd', washCount: 40, startMonth: 'Aug', immigrationSetting: 0, southern: false })
-    expect(r.treatedCrashIndex).toBeNull()
-    expect(r.baselineCrashIndex).toBeNull()
-    // a low wash that never sustains above 60 also renders the full year
-    const calm = runScenario({ colonyType: 'd', washCount: 10, startMonth: 'Aug', immigrationSetting: 0, southern: false })
-    expect(calm.treatedCrashIndex).toBeNull()
+    expect(r.treatedCrashIndex).toBe(6)
+    expect(r.baselineCrashIndex).toBe(6)
+  })
+
+  it('hides the rebound after a sustained breakdown (issue example)', () => {
+    // colony f, wash 40, Jun: wash peaks at 165 then collapses to ~6 at idx
+    // 10 and rebuilds to 32. The line ends at the collapse, hiding the
+    // misleading rebound.
+    const r = runScenario({ colonyType: 'f', washCount: 40, startMonth: 'Jun', immigrationSetting: 0, southern: false })
+    expect(r.treatedCrashIndex).toBe(10)
+    expect(r.treatedWash[r.treatedCrashIndex!]!).toBeLessThan(20)
   })
 
   it('with no treatments the treated line equals the baseline', () => {
