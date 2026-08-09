@@ -111,20 +111,22 @@ export function runScenario(input: ScenarioInput): ScenarioResult {
   const treatedMites = window.map((p) => byPeriod.get(p)!.mites_end)
   const baselineMites = window.map((p) => baselineRun.periods[p - 1]!.mites_end)
 
-  // First window index at which the *baseline* (no-treatment) line collapses
-// (issue #14). The model's `crashed` flag is sticky and fires on cell
-// invasion even at moderate wash counts, so the flag alone truncates too
-// early; and a low starting wash alone is already below any collapse floor.
-// The baseline ends at the collapse: the first period, at or after the flag
-// first fires, where the wash drops below max(1, 10% of the window's peak).
-// That is the count-down-to-zero; the rebuild after it is the misleading
-// rebound to hide. If the flag never fires, or the wash never drops below
-// the floor after it, the baseline renders the full year.
+  // First window index at which each line collapses (issue #14). The model's
+// `crashed` flag is sticky and fires on cell invasion even at moderate wash
+// counts, so the flag alone truncates too early; and a low starting wash
+// alone is already below any collapse floor. A line ends at its collapse:
+// the first period, at or after the flag first fires, where the wash drops
+// below max(1, 10% of the window's peak). That is the count-down-to-zero;
+// the rebuild after it is the misleading rebound to hide. If the flag never
+// fires, or the wash never drops below the floor after it, the line renders
+// the full year.
 //
-// The treated line always renders the full year: a treatment-induced drop to
-// zero is the intervention working, not a crash, and the user's plan should
-// show its full effect (drop + recovery). Only the no-treatment baseline
-// truncates at its genuine collapse.
+// The treated line renders the full year ONLY when a treatment plan exists:
+// a treatment-induced drop to zero is the intervention working (or failing),
+// and the user's plan should show its full effect. With no treatments the
+// treated line is the same data as the baseline, so it must end at the same
+// collapse — otherwise the identical blue line keeps plotting the post-crash
+// flatline and rebuild past where the grey line (correctly) stopped.
   const collapseIndex = (washArr: number[], flags: boolean[]) => {
     const flagAt = flags.findIndex(Boolean)
     if (flagAt < 0) return null
@@ -134,6 +136,8 @@ export function runScenario(input: ScenarioInput): ScenarioResult {
     return at >= 0 ? at : null
   }
   const baselineCrashIndex = collapseIndex(baselineWash, window.map((p) => baselineRun.periods[p - 1]!.crashed))
+  const hasPlan = (input.treatments?.length ?? 0) > 0
+  const treatedCrashIndex = hasPlan ? null : baselineCrashIndex
   return {
     startPeriod,
     initialMites,
@@ -143,7 +147,7 @@ export function runScenario(input: ScenarioInput): ScenarioResult {
     baselineWash,
     treatedMites,
     baselineMites,
-    treatedCrashIndex: null,
+    treatedCrashIndex,
     baselineCrashIndex,
   }
 }

@@ -73,11 +73,12 @@ describe('runScenario', () => {
   it('ends the baseline at the collapse, not the flag onset (issue #14)', () => {
     // wash-10 start in Aug: the sticky invasion flag fires at idx 1 (wash
     // 17.7) but the wash keeps climbing to 29, then collapses to ~0 at idx 6
-    // and rebuilds. The baseline must end at the collapse (idx 6), not the
-    // flag. The treated line (no treatment here) renders the full year.
+    // and rebuilds. The line must end at the collapse (idx 6), not the flag.
+    // With no treatments the treated line is the same data as the baseline,
+    // so it ends at the same collapse too.
     const r = runScenario({ colonyType: 'd', washCount: 10, startMonth: 'Aug', immigrationSetting: 0, southern: false })
     expect(r.baselineCrashIndex).toBe(6)
-    expect(r.treatedCrashIndex).toBeNull()
+    expect(r.treatedCrashIndex).toBe(6)
     // the wash at the collapse index is at/near zero
     expect(r.baselineWash[r.baselineCrashIndex!]!).toBeLessThan(1)
   })
@@ -88,7 +89,7 @@ describe('runScenario', () => {
     // render the build-up and end at the collapse, not truncate to one point.
     const r = runScenario({ colonyType: 'd', washCount: 40, startMonth: 'Aug', immigrationSetting: 0, southern: false })
     expect(r.baselineCrashIndex).toBe(6)
-    expect(r.treatedCrashIndex).toBeNull()
+    expect(r.treatedCrashIndex).toBe(6)
   })
 
   it('hides the rebound after a sustained breakdown (issue example)', () => {
@@ -100,16 +101,21 @@ describe('runScenario', () => {
     expect(r.baselineWash[r.baselineCrashIndex!]!).toBeLessThan(20)
   })
 
-  it('the treated line renders the full year even when the treatment drops the wash', () => {
-    // a treatment that drops the wash to (near) zero is the intervention
-    // working, not a crash — the treated line must render the full year
-    // (issue #14: only the no-treatment baseline truncates).
-    const r = runScenario({
+  it('the treated line renders the full year only when a treatment exists', () => {
+    // with a treatment that drops the wash to (near) zero, the treated line
+    // renders the full year — the intervention working, not a crash (issue
+    // #14: the no-treatment baseline still truncates).
+    const withPlan = runScenario({
       colonyType: 'd', washCount: 40, startMonth: 'Aug', immigrationSetting: 0, southern: false,
       treatments: [{ id: 1, month: 'Aug', productId: 'apivar' }],
     })
-    expect(r.treatedCrashIndex).toBeNull()
-    expect(r.baselineCrashIndex).toBe(6)
+    expect(withPlan.treatedCrashIndex).toBeNull()
+    expect(withPlan.baselineCrashIndex).toBe(6)
+    // without a treatment the treated line is identical to the baseline and
+    // must end at the same collapse (no misleading post-crash rebuild)
+    const noPlan = runScenario({ colonyType: 'd', washCount: 40, startMonth: 'Aug', immigrationSetting: 0, southern: false })
+    expect(noPlan.treatedCrashIndex).toBe(6)
+    expect(noPlan.treatedCrashIndex).toBe(noPlan.baselineCrashIndex)
   })
 
   it('with no treatments the treated line equals the baseline', () => {
