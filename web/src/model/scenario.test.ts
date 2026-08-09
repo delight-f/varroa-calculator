@@ -71,24 +71,28 @@ describe('runScenario', () => {
   })
 
   it('reports the per-line first crash index (issue #14)', () => {
-    // colony f, wash 40, Jun, no treatment: both lines crash (same run).
+    // colony f, wash 40, Jun: a sustained wash breakdown (>=3 consecutive
+    // periods above 60) starts at window index 2 (Jul). The treated and
+    // baseline lines truncate at the same point.
     const f = runScenario({ colonyType: 'f', washCount: 40, startMonth: 'Jun', immigrationSetting: 0, southern: false })
     expect(f.baselineCrashIndex).not.toBeNull()
     expect(f.treatedCrashIndex).not.toBeNull()
-    // the crash index points at a crashed period
-    expect(f.periods[f.baselineCrashIndex!]!.crashed).toBe(true)
-    // a heavy treatment that keeps the colony below a crash leaves the treated
-    // line un-truncated while the baseline still crashes (issue #14: per-line)
-    const treated = runScenario({
-      colonyType: 'd', washCount: 10, startMonth: 'Jun', immigrationSetting: 0, southern: false,
-      treatments: [
-        { id: 1, month: 'Jun', productId: 'apivar' },
-        { id: 2, month: 'Jul', productId: 'apivar' },
-        { id: 3, month: 'Aug', productId: 'apivar' },
-      ],
-    })
-    expect(treated.baselineCrashIndex).not.toBeNull()
-    expect(treated.treatedCrashIndex).toBeNull()
+    expect(f.treatedCrashIndex).toBe(f.baselineCrashIndex)
+    expect(f.treatedCrashIndex).toBe(2)
+    // the wash at the crash index exceeds the crash threshold
+    expect(f.treatedWash[f.treatedCrashIndex!]!).toBeGreaterThan(60)
+  })
+
+  it('does not truncate a transient peak or a healthy recovery', () => {
+    // a wash-40 start in Aug peaks briefly above 60 (idx 1) but recovers —
+    // not a sustained breakdown, so the full year renders (issue #14
+    // regression: the sticky flag truncated this to a single point).
+    const r = runScenario({ colonyType: 'd', washCount: 40, startMonth: 'Aug', immigrationSetting: 0, southern: false })
+    expect(r.treatedCrashIndex).toBeNull()
+    expect(r.baselineCrashIndex).toBeNull()
+    // a low wash that never sustains above 60 also renders the full year
+    const calm = runScenario({ colonyType: 'd', washCount: 10, startMonth: 'Aug', immigrationSetting: 0, southern: false })
+    expect(calm.treatedCrashIndex).toBeNull()
   })
 
   it('with no treatments the treated line equals the baseline', () => {

@@ -13,6 +13,7 @@ import type { MonthName } from './months'
 import type { PeriodResult } from './varroaModel'
 import { planToKills } from './treatmentPlan'
 import type { TreatmentEntry } from './treatmentPlan'
+import { ADVISORY } from './banner'
 
 export interface ScenarioInput {
   colonyType: string // single-letter code (d, n, p, a, b, c, r, s, f)
@@ -111,12 +112,25 @@ export function runScenario(input: ScenarioInput): ScenarioResult {
   const treatedMites = window.map((p) => byPeriod.get(p)!.mites_end)
   const baselineMites = window.map((p) => baselineRun.periods[p - 1]!.mites_end)
 
-  // First window index at which each trajectory crashes (issue #14). The
-  // treated line ends at its own crash, the baseline at its own — each
-  // trajectory has its own `crashed` flags (the shared `periods` array is
-  // the treated run's).
-  const treatedCrashIndex = window.findIndex((p) => byPeriod.get(p)!.crashed)
-  const baselineCrashIndex = window.findIndex((p) => baselineRun.periods[p - 1]!.crashed)
+  // First window index of a *sustained* wash breakdown (issue #14). The
+  // model's `crashed` flag is sticky (once set it stays on) and fires on cell
+  // invasion even at moderate wash counts, so it truncates far too early — a
+  // wash-40 start in Aug is flagged from the very first period. A single
+  // period above the crash threshold is also not a breakdown (a transient
+  // peak that then recovers is a healthy colony). So the line ends only at
+  // the start of a *sustained* run of wash > crashWash (>=3 consecutive
+  // periods), which is the genuine collapse. Each trajectory has its own wash
+  // array (the shared `periods` array is the treated run's).
+  const sustainedCrashAt = (washArr: number[]) => {
+    let run = 0
+    for (let i = 0; i < washArr.length; i++) {
+      run = washArr[i]! > ADVISORY.crashWash ? run + 1 : 0
+      if (run >= 3) return i - 2 // start of the sustained run
+    }
+    return -1
+  }
+  const treatedCrashIndex = sustainedCrashAt(treatedWash)
+  const baselineCrashIndex = sustainedCrashAt(baselineWash)
   return {
     startPeriod,
     initialMites,
