@@ -57,9 +57,12 @@ function App() {
     setTreatments((ts) => ts.filter((t) => t.id !== id))
   }
 
-  // x-axis tick/flag markers: group treatments by model period
+  // x-axis tick/flag markers: group treatments by display period. The period
+  // must be the *display* period (southern-aware) so markers land at the
+  // month the user sees on the x-axis, not 6 months off (issue: southern
+  // offset). The model kill array stays northern-indexed separately.
   const markers = useMemo(
-    () => groupTreatmentsByPeriod(treatments),
+    () => groupTreatmentsByPeriod(treatments, controls.southern),
     [treatments, controls.southern],
   )
 

@@ -47,16 +47,21 @@ export function planToKills(treatments: readonly TreatmentEntry[]): number[] {
 }
 
 /**
- * Period numbers (1..24, model-absolute) on which the plan applies a treatment.
- * Used for the chart's x-axis tick/flag markers (ADR-0003). Northern-indexed
- * like `planToKills` (issue #16): the month maps to its northern period; the
- * model's `_source_period` applies the southern rotation.
+ * Period numbers (1..24, model-absolute) on which the plan applies a treatment,
+ * for the chart's x-axis markers. `southern` selects the *display* period for
+ * the month: the chart x-axis shows southern-rotated labels, so the marker
+ * must sit at the display period of the chosen month. This is display-only —
+ * the model's kill array stays northern-indexed (`planToKills`) and the model
+ * applies the southern rotation itself.
  */
-export function treatmentPeriods(treatments: readonly TreatmentEntry[]): number[] {
+export function treatmentPeriods(
+  treatments: readonly TreatmentEntry[],
+  southern: boolean,
+): number[] {
   const seen = new Set<number>()
   const out: number[] = []
   for (const t of treatments) {
-    const period = monthToStartPeriod(t.month, false)
+    const period = monthToStartPeriod(t.month, southern)
     if (!seen.has(period)) {
       seen.add(period)
       out.push(period)
@@ -65,13 +70,14 @@ export function treatmentPeriods(treatments: readonly TreatmentEntry[]): number[
   return out
 }
 
-/** Treatments grouped by their model period (for chart markers). */
+/** Treatments grouped by their display period (for chart markers). */
 export function groupTreatmentsByPeriod(
   treatments: readonly TreatmentEntry[],
+  southern: boolean,
 ): Array<{ period: number; entries: TreatmentEntry[] }> {
-  return treatmentPeriods(treatments).map((period) => ({
+  return treatmentPeriods(treatments, southern).map((period) => ({
     period,
-    entries: treatments.filter((t) => monthToStartPeriod(t.month, false) === period),
+    entries: treatments.filter((t) => monthToStartPeriod(t.month, southern) === period),
   }))
 }
 

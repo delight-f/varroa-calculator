@@ -93,13 +93,19 @@ describe('planToKills', () => {
 })
 
 describe('treatmentPeriods', () => {
-  it('lists unique model periods with treatments, in order placed', () => {
+  it('lists unique display periods with treatments, in order placed (north)', () => {
     const plan = [entry(1, 'Jun', 'apivar'), entry(2, 'Jun', 'sugar-dusting'), entry(3, 'Sep', 'apiguard')]
-    expect(treatmentPeriods(plan)).toEqual([15, 21])
+    expect(treatmentPeriods(plan, false)).toEqual([15, 21])
+  })
+
+  it('rotates the display periods in the southern hemisphere', () => {
+    // Jun -> northern period 15, southern display period 3 (12-period rotation)
+    const plan = [entry(1, 'Jun', 'apivar'), entry(2, 'Sep', 'apiguard')]
+    expect(treatmentPeriods(plan, true)).toEqual([3, 9])
   })
 
   it('empty plan -> no markers', () => {
-    expect(treatmentPeriods([])).toEqual([])
+    expect(treatmentPeriods([], false)).toEqual([])
   })
 })
 

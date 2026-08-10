@@ -144,11 +144,13 @@ export function TrajectoryChart({
           // (Helpers.getStringX). A numeric index falls through to raw pixel
           // x and crams every triangle at the left edge (issue #15).
           x: periods[idx]!.label,
-          // pixel y pins the marker to the bottom of the grid (the x-axis);
-          // the triangle's apex points up, base sits on the axis line.
+          // pixel y pins the marker just BELOW the x-axis: the triangle is
+          // drawn apex-up (M x y-size ...), so centering at gridHeight puts
+          // the apex 6px above the axis line. Center at gridHeight + size so
+          // the apex meets the axis and the body hangs below it like a flag.
           // ApexCharts resolves "NNpx" y strings at runtime (Helpers.getY1Y2);
           // the types only allow numbers, so cast.
-          y: `${gridHeight}px` as unknown as number,
+          y: `${gridHeight + 6}px` as unknown as number,
           marker: {
             size: 6,
             shape: 'triangle' as const,
@@ -158,12 +160,17 @@ export function TrajectoryChart({
           },
           label: {
             text: `${names} · ${periods[idx]!.label}`,
+            // no box behind the hover text — just the product names in red.
+            // `background` drives the annotation rect (annotationsBackground);
+            // transparent + zero border removes it entirely.
             style: {
-              color: '#fff',
-              background: css.red,
+              color: css.red,
+              background: 'transparent',
               fontSize: '10px',
               cssClass: 'treatmark-label',
             },
+            borderColor: 'transparent',
+            borderWidth: 0,
           },
           mouseEnter: setLabelVisible(true),
           mouseLeave: setLabelVisible(false),
