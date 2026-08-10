@@ -101,6 +101,25 @@ describe('runScenario', () => {
     expect(r.baselineWash[r.baselineCrashIndex!]!).toBeLessThan(20)
   })
 
+  it('pins the issue #17 scenario: southern subtropical Aug wash 40 reaches ~118 then collapses', () => {
+    // Author question: is wash 100–118 before collapse plausible for colony `a`
+    // (subtropical, year-round brood)? The trajectory is the model's designed
+    // arithmetic — no brood break, so mites reproduce all 24 periods and the
+    // wash climbs to ~118 before cell-invasion overload collapses the colony.
+    // This test pins the current (validated-reference) output so a future
+    // change to the port cannot silently alter it without review.
+    const r = runScenario({ colonyType: 'a', washCount: 40, startMonth: 'Aug', immigrationSetting: 0, southern: true })
+    // display window starts at Aug (southern period 7)
+    expect(r.periods[0]!.label).toBe('Aug')
+    expect(r.baselineWash[0]!).toBeCloseTo(40, 6)
+    // the peak wash before the collapse reaches ~118 (issue #17 table)
+    const peak = Math.max(...r.baselineWash)
+    expect(peak).toBeGreaterThan(110)
+    expect(peak).toBeLessThan(130)
+    // the line ends at the collapse, not the flag onset
+    expect(r.baselineCrashIndex).not.toBeNull()
+  })
+
   it('the treated line renders the full year only when a treatment exists', () => {
     // with a treatment that drops the wash to (near) zero, the treated line
     // renders the full year — the intervention working, not a crash (issue

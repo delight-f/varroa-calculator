@@ -84,4 +84,21 @@ describe('backSolve', () => {
     expect(Number.isFinite(initialMites)).toBe(true)
     expect(initialMites).toBeGreaterThan(0)
   })
+
+  it('round-trips on the non-monotonic subtropical curve (colony a, P19)', () => {
+    // Issue #17 context: colony `a` (subtropical) keeps brood year-round, so
+    // wash-at-P19 is NOT monotonic in initial mites (peaks ~73 at ~100 mites,
+    // dips to ~26, rises again past 1e6). The bisection must still converge to
+    // a root that round-trips, and to the *sensible* small root — a degenerate
+    // ~1e6 root would put wash 40 on the collapse tail and spike the chart.
+    const startPeriod = 19
+    const target = 40
+    const config = { colony_type: 'a', southern_hemisphere: false, immigration_setting: 0 }
+    const initialMites = backSolve(target, startPeriod, config)
+    const got = washAtPeriod(initialMites, startPeriod, config)
+    expect(Math.abs(got - target)).toBeLessThan(1e-6)
+    // the sensible root: the one just before the curve's first peak, not the
+    // degenerate root beyond the valley (which sits > 100x higher)
+    expect(initialMites).toBeLessThan(1000)
+  })
 })
