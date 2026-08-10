@@ -54,6 +54,7 @@ export function TrajectoryChart({
   const chartRef = useRef<ApexCharts | null>(null)
   const [height, setHeight] = useState(420)
   const [gridWidth, setGridWidth] = useState(0)
+  const [gridHeight, setGridHeight] = useState(0)
 
   // Size the chart to fill its container (the chart-card), so the plot area
   // stretches to match the controls panel height on desktop instead of
@@ -75,9 +76,10 @@ export function TrajectoryChart({
     const el = containerRef.current
     if (!el) return
     const update = () => {
-      const gw = (chartRef.current as unknown as { w?: { globals?: { gridWidth?: number } } })
-        ?.w?.globals?.gridWidth
-      if (typeof gw === 'number' && gw > 0) setGridWidth(gw)
+      const g = (chartRef.current as unknown as { w?: { globals?: { gridWidth?: number; gridHeight?: number } } })
+        ?.w?.globals
+      if (typeof g?.gridWidth === 'number' && g.gridWidth > 0) setGridWidth(g.gridWidth)
+      if (typeof g?.gridHeight === 'number' && g.gridHeight > 0) setGridHeight(g.gridHeight)
     }
     update()
     const ro = new ResizeObserver(update)
@@ -118,24 +120,56 @@ export function TrajectoryChart({
     const firstCrash = periods.findIndex((p) => p.crashed)
     const yTitle = yUnit === 'wash' ? 'Mites per wash' : 'Total mites'
 
-    // x-axis tick/flag markers (ADR-0003): a short vertical tick at the
-    // treatment's category, with the product name as the annotation label.
-    const xAnnotations = treatmentPeriods.map((t) => {
-      const idx = periods.findIndex((p) => p.period === t.period)
-      if (idx < 0) return null
-      const label = t.entries.map((e) => treatmentProduct(e.productId).name).join(' + ')
-      return {
-        x: idx, // category index
-        borderColor: css.accent,
-        strokeDashArray: 0,
-        strokeWidth: 2,
-        label: {
-          text: label,
-          position: 'top' as const,
-          style: { color: '#fff', background: css.accent, fontSize: '10px' },
-        },
-      }
-    }).filter((a): a is NonNullable<typeof a> => a !== null)
+    // Treatment markers (issue #15): a small red triangle planted on the
+    // x-axis at each treatment period (author resolution, ADR-0003 "tick/flag"
+    // overridden to a triangle). The product names are NOT permanent labels —
+    // the label text is drawn but hidden (opacity 0) and revealed on marker
+    // hover via mouseEnter/mouseLeave, so the chart stays uncluttered. One
+    // triangle per period, even when multiple products share it; hover lists
+    // them joined with " + " plus the month.
+    const treatmentAnnotations = treatmentPeriods
+      .map((t) => {
+        const idx = periods.findIndex((p) => p.period === t.period)
+        if (idx < 0) return null
+        const names = t.entries.map((e) => treatmentProduct(e.productId).name).join(' + ')
+        const id = `treatmark-${idx}`
+        const setLabelVisible = (visible: boolean) => () => {
+          const el = document.querySelector(`.apexcharts-point-annotation-label.${id}`)
+          if (el instanceof SVGElement) el.style.opacity = visible ? '1' : '0'
+        }
+        return {
+          id,
+          // x as the month label string: ApexCharts resolves category
+          // annotations by string lookup against the (blanked) axis labels
+          // (Helpers.getStringX). A numeric index falls through to raw pixel
+          // x and crams every triangle at the left edge (issue #15).
+          x: periods[idx]!.label,
+          // pixel y pins the marker to the bottom of the grid (the x-axis);
+          // the triangle's apex points up, base sits on the axis line.
+          // ApexCharts resolves "NNpx" y strings at runtime (Helpers.getY1Y2);
+          // the types only allow numbers, so cast.
+          y: `${gridHeight}px` as unknown as number,
+          marker: {
+            size: 6,
+            shape: 'triangle' as const,
+            fillColor: css.red,
+            strokeColor: css.red,
+            strokeWidth: 1,
+          },
+          label: {
+            text: `${names} · ${periods[idx]!.label}`,
+            style: {
+              color: '#fff',
+              background: css.red,
+              fontSize: '10px',
+              cssClass: 'treatmark-label',
+            },
+          },
+          mouseEnter: setLabelVisible(true),
+          mouseLeave: setLabelVisible(false),
+        }
+      })
+      .filter((a): a is NonNullable<typeof a> => a !== null)
 
     // Threshold reference lines (wash mode only): the "watch" line (3
     // mites/wash) and the treat threshold (9 mites/wash in summer). Both are
@@ -188,27 +222,35 @@ export function TrajectoryChart({
         // responsive: fill the card width, fixed height; ApexCharts resizes
         // with the container on window resize
         width: '100%',
+        // click-to-place (secondary path, issue #18): the only click path
+        // that carries the data-point index. `e` is the DOM event, `cc` the
+        // chart context, `opt` = { seriesIndex, dataPointIndex, w }.
+        ...(onClickPeriod
+          ? {
+              events: {
+                dataPointSelection: (
+                  _e: unknown,
+                  _cc: unknown,
+                  opt?: { dataPointIndex?: number },
+                ) => {
+                  const idx = opt?.dataPointIndex
+                  if (idx !== undefined && periods[idx]) {
+                    onClickPeriod(periods[idx]!.period)
+                  }
+                },
+              },
+            }
+          : {}),
       },
       colors: [css.accent, css.baseline],
       stroke: {
         width: [3, 1.5],
         curve: 'smooth',
       },
-      // markers are the click targets for click-to-place (secondary path);
-      // onClick receives (event, chartContext, {dataPointIndex, seriesIndex})
-      // at runtime; the type only declares the first arg, so narrow the rest.
-      markers: onClickPeriod
-        ? {
-            size: 4,
-            hover: { size: 6 },
-            onClick: (e?: unknown) => {
-              if (e && typeof e === 'object' && 'dataPointIndex' in e) {
-                const idx = (e as { dataPointIndex?: number }).dataPointIndex
-                if (idx !== undefined) onClickPeriod(periods[idx]!.period)
-              }
-            },
-          }
-        : { size: 0 },
+      // markers are enabled when click-to-place is on; the click path is
+      // chart.events.dataPointSelection below (issue #18: markers.onClick is
+      // a raw DOM listener — the callback never receives dataPointIndex).
+      markers: onClickPeriod ? { size: 4, hover: { size: 6 } } : { size: 0 },
       grid: { borderColor: css.grid },
       xaxis: {
         type: 'category',
@@ -253,7 +295,6 @@ export function TrajectoryChart({
       fill: { opacity: [1, 1] },
       annotations: {
         xaxis: [
-          ...xAnnotations,
           // crash zone: shaded/faded region from the crash point to the end
           // (numbers keep plotting past it — never blanked)
           ...(firstCrash >= 0
@@ -294,9 +335,10 @@ export function TrajectoryChart({
             : []),
         ],
         yaxis: yAnnotations,
+        points: treatmentAnnotations,
       },
     }
-  }, [periods, treated, baseline, treatedMites, baselineMites, treatmentPeriods, yUnit, css, onClickPeriod, gridWidth, treatedCrashIndex, baselineCrashIndex])
+  }, [periods, treated, baseline, treatedMites, baselineMites, treatmentPeriods, yUnit, css, onClickPeriod, gridWidth, gridHeight, treatedCrashIndex, baselineCrashIndex])
 
   const seriesData = [
     { name: 'With treatments', data: seriesActive },

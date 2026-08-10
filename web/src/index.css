@@ -347,7 +347,16 @@ body {
   box-shadow: var(--shadow-hover);
 }
 
-@media (max-width: 900px) {
+/* Treatment markers (issue #15): red triangle on the x-axis, product names
+   hidden until hover. The label is drawn by ApexCharts but kept invisible;
+   hovering the triangle flips its inline opacity via mouseEnter/mouseLeave. */
+.apexcharts-point-annotation-label.treatmark-label {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+@media (max-width: 900px) { … }
   .app-body {
     flex-direction: column;
   }
