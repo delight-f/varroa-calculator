@@ -4,6 +4,7 @@ import type { ControlsState } from './components/ControlsPanel'
 import { TreatmentPlanSection } from './components/TreatmentPlanSection'
 import { TrajectoryChart } from './components/TrajectoryChart'
 import { Banner } from './components/Banner'
+import { MonthlyTable } from './components/MonthlyTable'
 import { runScenario } from './model/scenario'
 import { groupTreatmentsByPeriod } from './model/treatmentPlan'
 import type { TreatmentEntry } from './model/treatmentPlan'
@@ -116,6 +117,9 @@ function App() {
                 if (label) addTreatment(label as MonthName, 'apivar')
               }}
             />
+          </div>
+          <div className="chart-card table-card">
+            <MonthlyTable periods={scenario.periods} />
           </div>
         </section>
       </main>

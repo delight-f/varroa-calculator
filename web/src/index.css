@@ -392,6 +392,58 @@ body {
   transition: opacity 0.12s ease;
 }
 
+/* Monthly table under the chart: 24 columns (one per model period), month
+   labels repeating like the x-axis, two numeric rows (mites, % in brood). */
+.table-card {
+  flex: none;
+  padding: var(--space-sm) var(--space-md);
+  overflow-x: auto;
+}
+
+.monthly-table {
+  font-size: 12px;
+}
+
+.monthly-table table {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.monthly-table th,
+.monthly-table td {
+  padding: 3px 2px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.monthly-table thead th {
+  color: var(--color-text-muted);
+  font-weight: 500;
+  font-size: 11px;
+}
+
+.monthly-table .month-cell {
+  width: calc((100% - 64px) / 24);
+}
+
+.monthly-table .month-cell.blank {
+  color: transparent;
+}
+
+.monthly-table .num-cell {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.monthly-table .table-row-label {
+  text-align: left;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  width: 64px;
+}
+
 @media (max-width: 900px) { … }
   .app-body {
     flex-direction: column;

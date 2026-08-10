@@ -30,6 +30,8 @@ export interface ScenarioDisplayPeriod {
   label: MonthName // calendar month label
   wash: number
   mites: number
+  /** fraction (0..1) of mites in brood (capped brood) — treatment-adjusted */
+  pctInBrood: number
   crashed: boolean
 }
 
@@ -102,6 +104,7 @@ export function runScenario(input: ScenarioInput): ScenarioResult {
       label: periodToMonth(p, input.southern),
       wash: pr.wash_count,
       mites: pr.mites_end,
+      pctInBrood: pr.pct_in_brood,
       crashed: pr.crashed,
     }
   })

@@ -206,6 +206,39 @@ it('same-period treatments compose: one vs two treatments differ', () => {
     }
   })
 
+  it('exposes the % of mites in brood per display period', () => {
+    const r = runScenario({
+      colonyType: 'd', washCount: 10, startMonth: 'Jun', immigrationSetting: 0, southern: false,
+    })
+    expect(r.periods).toHaveLength(24)
+    for (const p of r.periods) {
+      // pctInBrood is a fraction in [0, 1] = 1 - pct_phoretic (model field CB)
+      expect(p.pctInBrood).toBeGreaterThanOrEqual(0)
+      expect(p.pctInBrood).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('pct in brood comes from the treated run (matches treated mites)', () => {
+    const r = runScenario({
+      colonyType: 'd', washCount: 10, startMonth: 'Jun', immigrationSetting: 0, southern: false,
+      treatments: [{ id: 1, month: 'Sep', productId: 'apivar' }],
+    })
+    // the display periods' pctInBrood must equal the treated run's pct_in_brood
+    const byPeriod = r.byPeriod
+    for (const p of r.periods) {
+      expect(p.pctInBrood).toBeCloseTo(byPeriod.get(p.period)!.pct_in_brood, 12)
+    }
+    // a treatment kill does not change the *fraction* in brood (it is a
+    // distribution split, applied equally to phoretic + in-brood mites), so
+    // the treated fraction equals the baseline fraction for the same period
+    const baselineRun = runScenario({
+      colonyType: 'd', washCount: 10, startMonth: 'Jun', immigrationSetting: 0, southern: false,
+    })
+    for (let i = 0; i < 24; i++) {
+      expect(r.periods[i]!.pctInBrood).toBeCloseTo(baselineRun.periods[i]!.pctInBrood, 12)
+    }
+  })
+
   it('a treatment bends the mite line below its baseline from the treatment period on', () => {
     const r = runScenario({
       colonyType: 'd', washCount: 10, startMonth: 'Jun', immigrationSetting: 0, southern: false,
