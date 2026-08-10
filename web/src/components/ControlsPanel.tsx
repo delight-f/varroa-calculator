@@ -103,17 +103,28 @@ export function ControlsPanel({ state, onChange, children }: ControlsProps) {
             ))}
           </select>
         </label>
-        <label className="field">
+        <div className="field">
           <span className="field-label">Chart y-axis</span>
           <span className="field-hint">Wash count or the underlying total mite population</span>
-          <select
-            value={state.yUnit}
-            onChange={(e) => onChange({ yUnit: e.target.value as ControlsState['yUnit'] })}
-          >
-            <option value="wash">Mites per wash</option>
-            <option value="mites">Total mites</option>
-          </select>
-        </label>
+          <div className="seg-toggle" role="group" aria-label="Chart y-axis unit">
+            <button
+              type="button"
+              className={state.yUnit === 'wash' ? 'seg-toggle-btn active' : 'seg-toggle-btn'}
+              aria-pressed={state.yUnit === 'wash'}
+              onClick={() => onChange({ yUnit: 'wash' })}
+            >
+              Wash count
+            </button>
+            <button
+              type="button"
+              className={state.yUnit === 'mites' ? 'seg-toggle-btn active' : 'seg-toggle-btn'}
+              aria-pressed={state.yUnit === 'mites'}
+              onClick={() => onChange({ yUnit: 'mites' })}
+            >
+              Total mites
+            </button>
+          </div>
+        </div>
       </section>
 
       {children}
