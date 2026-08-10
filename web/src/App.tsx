@@ -37,6 +37,7 @@ let nextTreatmentId = 1
 function App() {
   const [controls, setControls] = useState<ControlsState>(initialControls)
   const [treatments, setTreatments] = useState<TreatmentEntry[]>([])
+  const [plotGeometry, setPlotGeometry] = useState<{ firstCenter: number; catWidth: number } | null>(null)
 
   const scenario = useMemo(
     () =>
@@ -116,10 +117,15 @@ function App() {
                 const label = scenario.periods.find((p) => p.period === period)?.label
                 if (label) addTreatment(label as MonthName, 'apivar')
               }}
+              onPlotGeometry={setPlotGeometry}
             />
           </div>
           <div className="chart-card table-card">
-            <MonthlyTable periods={scenario.periods} />
+            <MonthlyTable
+              periods={scenario.periods}
+              firstCenter={plotGeometry?.firstCenter ?? null}
+              catWidth={plotGeometry?.catWidth ?? null}
+            />
           </div>
         </section>
       </main>

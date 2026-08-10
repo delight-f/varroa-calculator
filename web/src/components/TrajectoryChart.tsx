@@ -36,6 +36,14 @@ export interface ChartProps {
   baselineCrashIndex?: number | null
   /** secondary interaction: click a period to place a treatment */
   onClickPeriod?: (period: number) => void
+  /**
+   * Reports the chart's data-point geometry so sibling content (the monthly
+   * table) can align its columns to the chart's categories: `firstCenter` is
+   * the first data point's center relative to the chart container (y-axis
+   * gutter + half category), `catWidth` the pixel width of one category
+   * (the distance between adjacent data points).
+   */
+  onPlotGeometry?: (g: { firstCenter: number; catWidth: number }) => void
 }
 
 export function TrajectoryChart({
@@ -49,6 +57,7 @@ export function TrajectoryChart({
   treatedCrashIndex,
   baselineCrashIndex,
   onClickPeriod,
+  onPlotGeometry,
 }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<ApexCharts | null>(null)
@@ -76,16 +85,42 @@ export function TrajectoryChart({
     const el = containerRef.current
     if (!el) return
     const update = () => {
-      const g = (chartRef.current as unknown as { w?: { globals?: { gridWidth?: number; gridHeight?: number } } })
+      const g = (chartRef.current as unknown as { w?: { globals?: { gridWidth?: number; gridHeight?: number; dataPointsDividedWidth?: number } } })
         ?.w?.globals
       if (typeof g?.gridWidth === 'number' && g.gridWidth > 0) setGridWidth(g.gridWidth)
       if (typeof g?.gridHeight === 'number' && g.gridHeight > 0) setGridHeight(g.gridHeight)
+      // plot-area geometry for the monthly table. The table must align to the
+      // chart's *data points*. The chart renders 24 evenly-spaced categories;
+      // measure the first real data point's center (relative to the chart
+      // container) and the category width from the markers' cx attributes.
+      // Crash-truncation end-cap duplicates sit at cx=0 and are skipped.
+      if (onPlotGeometry) {
+        const markers = Array.from(el.querySelectorAll('.apexcharts-series .apexcharts-marker'))
+        const real = markers.filter((mm) => mm.getAttribute('cx') !== '0')
+        const cxs = Array.from(new Set(real.map((mm) => parseFloat(mm.getAttribute('cx')!)))).sort(
+          (a, b) => a - b,
+        )
+        const firstCx = cxs[0]
+        const catWidth = cxs.length > 1 ? cxs[1]! - cxs[0]! : null
+        const firstMarker = firstCx != null ? real.find((mm) => parseFloat(mm.getAttribute('cx')!) === firstCx) : undefined
+        const firstRect = firstMarker?.getBoundingClientRect()
+        const containerRect = el.getBoundingClientRect()
+        if (firstRect && catWidth && catWidth > 0) {
+          onPlotGeometry({
+            firstCenter: firstRect.left + firstRect.width / 2 - containerRect.left,
+            catWidth,
+          })
+        }
+      }
     }
     update()
     const ro = new ResizeObserver(update)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [height])
+    // Re-measure whenever the chart's content changes (y-unit toggle changes
+    // the y-axis gutter width, shifting the data points) — the ResizeObserver
+    // alone misses data-driven re-renders that don't change the container size.
+  }, [height, onPlotGeometry, yUnit, treated, baseline, treatedMites, baselineMites])
   const css = useMemo(() => {
     const s = getComputedStyle(document.documentElement)
     return {

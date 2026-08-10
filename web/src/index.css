@@ -424,8 +424,15 @@ body {
   font-size: 11px;
 }
 
-.monthly-table .month-cell {
-  width: calc((100% - 64px) / 24);
+/* Row-label column width is set inline from the chart's plot geometry
+   (y-axis gutter); defaults to 64px before the geometry is known. Data
+   column widths are also inline (plotWidth / 24). */
+.monthly-table .table-row-label {
+  text-align: left;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  width: 64px;
+  min-width: 64px;
 }
 
 .monthly-table .month-cell.blank {
@@ -435,13 +442,6 @@ body {
 .monthly-table .num-cell {
   font-variant-numeric: tabular-nums;
   color: var(--color-text);
-}
-
-.monthly-table .table-row-label {
-  text-align: left;
-  font-weight: 500;
-  color: var(--color-text-muted);
-  width: 64px;
 }
 
 @media (max-width: 900px) { … }
